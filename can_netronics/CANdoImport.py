@@ -5,13 +5,15 @@
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 #  TITLE :- CANdo.dll header file - CANdoImport.py
-#  AUTHOR :- Martyn Brown
+#  AUTHOR(s) :- Martyn Brown, Riccardo Belli
 #  DATE :- 22/01/21
 #
 #  DESCRIPTION :- Python import module for interfacing with the CANdo.dll.
 #
 #  UPDATES :-
-#  22/01/21 Created
+#  22/01/21 Created (Martyn Brown)
+#  01/10/24 Modified for python-can compatibility, type
+#           hinting and error codes (Riccardo Belli)
 #
 #  LICENSE :-
 #  The SDK (Software Development Kit) provided for use with the CANdo device
@@ -82,9 +84,9 @@ CANDO_BUS_LOAD_STATUS = 3  # Bus load status received
 CANDO_SETUP_STATUS = 4  # CAN setup status received
 CANDO_ANALOG_INPUT_STATUS = 5  # Analogue I/P status received
 # CANdo USB PIDs
-CANDO_PID = "8095"  # CANdo PID
-CANDOISO_PID = "8660"  # CANdoISO PID
-CANDO_AUTO_PID = "889B"  # CANdo AUTO PID
+CANDO_PID = b"8095"  # CANdo PID
+CANDOISO_PID = b"8660"  # CANdoISO PID
+CANDO_AUTO_PID = b"889B"  # CANdo AUTO PID
 # CANdo function return codes
 CANDO_SUCCESS = 0x0000  # All OK
 CANDO_USB_DLL_ERROR = 0x0001  # WinUSB DLL error
@@ -300,7 +302,9 @@ CANdoReceive.argtypes = [PCANdoUSB, PCANdoCANBuffer, PCANdoStatus]
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 
-
+# ------------------------------------------------------------------------------
+# TYPE CHECKING AND TYPE ALIASES
+# ------------------------------------------------------------------------------
 if TYPE_CHECKING:
     CANdoUSBPtrType = ctypes._Pointer[TCANdoUSB]  # type: ignore
     CANdoCANBufferPtrType = ctypes._Pointer[TCANdoCANBuffer]  # type: ignore
@@ -318,6 +322,9 @@ else:
     MsgQueueType = Queue
 
 
+# ------------------------------------------------------------------------------
+# BIT TIMINGS UTILITIES
+# ------------------------------------------------------------------------------
 class CANDoISOBusTiming:
     def __init__(self, brp: int, propseg: int, phseg1: int, phseg2: int, sjw: int, sam: int) -> None:
         self.brp = brp

@@ -20,6 +20,7 @@ from CANdoImport import (
     CANDO_RUN,
     CANDO_STOP,
     CANDO_SUCCESS,
+    CANDOISO_PID,
     CANdoCANBufferPtrType,
     CANdoClearStatus,
     CANdoClose,
@@ -315,6 +316,8 @@ class CANDoISO(BusABC):
                 if CANdoGetPID(CANdoNo, byref(self.CANdoPID)) == CANDO_SUCCESS:
                     # PID
                     log.debug(f"  Device no. {CANdoNo} >\n    PID = 0x{self.CANdoPID.value.decode('utf-8').upper()}")
+                    if self.CANdoPID.value != CANDOISO_PID:
+                        log.warning(f"    Device no. {CANdoNo} is not a CANdoISO device!")
 
                     # H/W type & S/N
                     log.debug(
