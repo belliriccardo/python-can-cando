@@ -1,25 +1,15 @@
 import logging
 import threading
-from ctypes import (
-    POINTER,
-    Array,
-    _Pointer,
-    byref,
-    c_char,
-    c_int,
-    c_ubyte,
-    pointer,
-)
+from ctypes import byref, c_int, c_ubyte, pointer
 from queue import Empty, Queue
 from time import sleep, time
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from can import BusABC, Message
 from can.typechecking import AutoDetectedConfig, CanFilters
-
 from CANdoImport import (
+    CAN_MSG_TIMESTAMP_RESOLUTION,
     CANDO_CAN_BUFFER_LENGTH,
-    CANDO_CLK_FREQ_HIGH,
     CANDO_DEVICE_STATUS,
     CANDO_ID_11_BIT,
     CANDO_ID_29_BIT,
@@ -30,6 +20,7 @@ from CANdoImport import (
     CANDO_RUN,
     CANDO_STOP,
     CANDO_SUCCESS,
+    CANdoCANBufferPtrType,
     CANdoClearStatus,
     CANdoClose,
     CANdoFlushBuffers,
@@ -37,145 +28,28 @@ from CANdoImport import (
     CANdoGetPID,
     CANdoGetVersion,
     CANdoOpenDevice,
+    CANdoPIDType,
     CANdoReceive,
     CANdoRequestStatus,
     CANdoSetBaudRate,
     CANdoSetFilters,
     CANdoSetMode,
     CANdoSetState,
+    CANdoStatusPtrType,
     CANdoTransmit,
+    CANdoUSBPtrType,
+    MsgQueueType,
     TCANdoCANBuffer,
     TCANdoDevice,
     TCANdoDeviceString,
     TCANdoStatus,
     TCANdoUSB,
+    candoiso_get_timing,
 )
-
-if TYPE_CHECKING:
-    CANdoUSBPtr_t = _Pointer[TCANdoUSB]
-    CANdoCANBufferPtr_t = _Pointer[TCANdoCANBuffer]
-    CANdoStatusPtr_t = _Pointer[TCANdoStatus]
-else:
-    CANdoUSBPtr_t = POINTER(TCANdoUSB)
-    CANdoCANBufferPtr_t = POINTER(TCANdoCANBuffer)
-    CANdoStatusPtr_t = POINTER(TCANdoStatus)
 
 log = logging.getLogger("can.CANDoISO")
 log.addHandler(logging.StreamHandler())
 log.setLevel(logging.DEBUG)
-
-CANDOISO_F_CLOCK = CANDO_CLK_FREQ_HIGH * 1000
-CAN_MSG_TIMESTAMP_RESOLUTION = 25.6e-6  # Timestamp resolution is 25.6us per bit
-
-
-# CANdo Status Error (may be logical ORed together)
-CANDO_OK = (0x00, "All OK")
-CANDO_USB_RX_OVERRUN = (0x01, "USB port receive message overrun")
-CANDO_USB_RX_CORRUPTED = (0x02, "USB port receive message invalid")
-CANDO_USB_RX_CRC_ERROR = (0x04, "USB port receive message CRC error")
-CANDO_CAN_RX_NO_DATA = (0x08, "CAN receive message no data")
-CANDO_CAN_RX_OVERRUN = (0x10, "CAN receive message overrun")
-CANDO_CAN_RX_INVALID = (0x20, "CAN receive message invalid")
-CANDO_CAN_TX_OVERRUN = (0x40, "CAN transmit message overrun")
-CANDO_CAN_BUS_ERROR = (0x80, "CAN bus error")
-
-
-# CANdo BusState (may be logical ORed together)
-CAN_OK = (0x00, "All OK")
-CAN_WARN = (0x01, "Rx/Tx warning (>95 errors)")
-CAN_RX_WARN = (0x02, "Receiver warning (>95 errors)")
-CAN_TX_WARN = (0x04, "Transmitter warning (>95 errors)")
-CAN_RX_PASSIVE = (0x08, "Receiver bus passive (>127 errors)")
-CAN_TX_PASSIVE = (0x10, "Transmitter bus passive (>127 errors)")
-CAN_TX_OFF = (0x20, "Transmitter bus off (>255 errors)")
-CAN_RX1_OVERFLOW = (0x40, "Receive buffer 1 overflow")
-CAN_RX2_OVERFLOW = (0x80, "Receive buffer 2 overflow")
-
-
-def CANdoStsErr(value: int) -> str:
-    # CANdo Status Error (may be logical ORed together)
-    sts_err = ""
-
-    if value & CANDO_USB_RX_OVERRUN[0]:
-        sts_err += f"{CANDO_USB_RX_OVERRUN[1]}, "
-    if value & CANDO_USB_RX_CORRUPTED[0]:
-        sts_err += f"{CANDO_USB_RX_CORRUPTED[1]}, "
-    if value & CANDO_USB_RX_CRC_ERROR[0]:
-        sts_err += f"{CANDO_USB_RX_CRC_ERROR[1]}, "
-    if value & CANDO_CAN_RX_NO_DATA[0]:
-        sts_err += f"{CANDO_CAN_RX_NO_DATA[1]}, "
-    if value & CANDO_CAN_RX_OVERRUN[0]:
-        sts_err += f"{CANDO_CAN_RX_OVERRUN[1]}, "
-    if value & CANDO_CAN_RX_INVALID[0]:
-        sts_err += f"{CANDO_CAN_RX_INVALID[1]}, "
-    if value & CANDO_CAN_TX_OVERRUN[0]:
-        sts_err += f"{CANDO_CAN_TX_OVERRUN[1]}, "
-    if value & CANDO_CAN_BUS_ERROR[0]:
-        sts_err += f"{CANDO_CAN_BUS_ERROR[1]}, "
-
-    if sts_err == "":
-        sts_err = "All OK"
-    return sts_err.rstrip(", ")
-
-
-def CANdoBusStsErr(value: int) -> str:
-    # CANdo Bus State Error (may be logical ORed together)
-    sts_err = ""
-
-    if value & CAN_WARN[0]:
-        sts_err += f"{CAN_WARN[1]}, "
-    if value & CAN_RX_WARN[0]:
-        sts_err += f"{CAN_RX_WARN[1]}, "
-    if value & CAN_TX_WARN[0]:
-        sts_err += f"{CAN_TX_WARN[1]}, "
-    if value & CAN_RX_PASSIVE[0]:
-        sts_err += f"{CAN_RX_PASSIVE[1]}, "
-    if value & CAN_TX_PASSIVE[0]:
-        sts_err += f"{CAN_TX_PASSIVE[1]}, "
-    if value & CAN_TX_OFF[0]:
-        sts_err += f"{CAN_TX_OFF[1]}, "
-    if value & CAN_RX1_OVERFLOW[0]:
-        sts_err += f"{CAN_RX1_OVERFLOW[1]}, "
-    if value & CAN_RX2_OVERFLOW[0]:
-        sts_err += f"{CAN_RX2_OVERFLOW[1]}, "
-
-    if sts_err == "":
-        sts_err = "All OK"
-    return sts_err.rstrip(", ")
-
-
-class CANDoISOBusTiming:
-    def __init__(
-        self, brp: int, propseg: int, phseg1: int, phseg2: int, sjw: int, sam: int
-    ) -> None:
-        self.brp = brp
-        self.propseg = propseg
-        self.phseg1 = phseg1
-        self.phseg2 = phseg2
-        self.sjw = sjw
-        self.sam = sam
-        self.f_clock = CANDOISO_F_CLOCK
-        self.baud = self.f_clock / (2 * (brp + 1) * (4 + propseg + phseg1 + phseg2))
-
-
-# Values start at 0 for these timings, see docs
-CANDOISO_COMMON_TIMINGS = {
-    # TODO: Add these as well
-    # 12500: CANDoISOBusTiming(...),
-    # 20000: CANDoISOBusTiming(...),
-    # 50000: CANDoISOBusTiming(...),
-    # 100000: CANDoISOBusTiming(...),
-    125000: CANDoISOBusTiming(7, 4, 7, 5, 0, 0),
-    250000: CANDoISOBusTiming(3, 4, 7, 5, 0, 0),
-    500000: CANDoISOBusTiming(1, 4, 7, 5, 0, 0),  # Sample point at 70%
-    # 500000: CANDoISOBusTiming(3, 2, 3, 1, 0, 0),  # Sample point at 80%
-    # 500000: CANDoISOBusTiming(1, 7, 7, 2, 0, 0),  # Sample point at 85%
-    1000000: CANDoISOBusTiming(1, 1, 3, 2, 0, 0),
-}
-
-for baud, timing in CANDOISO_COMMON_TIMINGS.items():
-    if baud != timing.baud:
-        log.error(f"Error in baud rate calculation for {baud}!")
 
 
 class CANDoISO(BusABC):
@@ -185,24 +59,27 @@ class CANDoISO(BusABC):
     TCANdoDevices: Any
     CANdoDevices: Any
     PCANdoDevices: Any
-    CANdoPID: Array[c_char]
+
+    CANdoPID: CANdoPIDType
 
     CANdoUSB: TCANdoUSB
-    CANdoUSBPtr: CANdoUSBPtr_t
+    CANdoUSBPtr: CANdoUSBPtrType
 
     # Create a buffer for the received CAN messages
     CANdoCANBuffer: TCANdoCANBuffer
-    CANdoCANBufferPtr: CANdoCANBufferPtr_t
+    CANdoCANBufferPtr: CANdoCANBufferPtrType
 
     # Create a buffer for received CANdo status
     CANdoStatus: TCANdoStatus
-    CANdoStatusPtr: CANdoStatusPtr_t
+    CANdoStatusPtr: CANdoStatusPtrType
+
+    default_bitrate = 500000
 
     def __init__(
         self,
         channel: Optional[int] = None,
         can_filters: Optional[CanFilters] = None,
-        bitrate: Optional[int] = 500000,
+        bitrate: Optional[int] = default_bitrate,
         **kwargs: object,
     ) -> None:
         self.channel = channel
@@ -241,10 +118,7 @@ class CANDoISO(BusABC):
                 f"only {self.NoOfDevices.value} devices detected and values start at 0",
             )
 
-        if bitrate not in CANDOISO_COMMON_TIMINGS:
-            raise ValueError(f"Unsupported bitrate: {bitrate}")
-
-        self.bit_timing = CANDOISO_COMMON_TIMINGS[bitrate]
+        self.bit_timing = candoiso_get_timing(bitrate or self.default_bitrate)
 
         # CANdoOpen function
         self.CANdoUSB = TCANdoUSB()  # Create an instance of TCANdoUSB
@@ -277,8 +151,7 @@ class CANDoISO(BusABC):
 
         self.t_start = time()
 
-        # Surely there is a better way to do this?
-        self.msg_queue: Queue[Message] = Queue()
+        self.msg_queue: MsgQueueType = Queue()
 
         self._is_shutdown = False
 
@@ -289,10 +162,7 @@ class CANDoISO(BusABC):
 
     def open_device(self, channel: int) -> None:
         # Open a connection to the selected device
-        if (
-            CANdoOpenDevice(self.CANdoUSBPtr, byref(self.CANdoDevices[channel]))
-            == CANDO_SUCCESS
-        ):
+        if CANdoOpenDevice(self.CANdoUSBPtr, byref(self.CANdoDevices[channel])) == CANDO_SUCCESS:
             log.debug(
                 f"Connection open to {self.CANdoUSB.Description.decode('utf-8')}, "
                 f"S/N {self.CANdoUSB.SerialNo.decode('utf-8')}",
@@ -348,28 +218,46 @@ class CANDoISO(BusABC):
 
     def set_filters(self, filters: Optional[CanFilters] = None) -> None:
         log.warning("Filters are not implemented yet, all messages will be received")
-        # TODO: Check docs
-        if (
-            CANdoSetFilters(
-                self.CANdoUSBPtr,
-                0,
-                CANDO_ID_29_BIT,
-                0,
-                CANDO_ID_11_BIT,
-                0,
-                0,
-                CANDO_ID_29_BIT,
-                0,
-                CANDO_ID_11_BIT,
-                0,
-                CANDO_ID_29_BIT,
-                0,
-                CANDO_ID_11_BIT,
-                0,
-            )
-            != CANDO_SUCCESS
-        ):
-            raise ValueError("Failed to set filters!")
+        # CANdoUSBPointer - pointer to TCANdoUSB structure
+        # Rx1Mask - receive buffer 1 mask
+        # Rx1IDE1 - flag to indicate Rx1Mask & Rx1Filter1 values are either 11 or 29 bit values (0 = 11 bit ID, 1 = 29 bit ID)
+        # Rx1Filter1 - receive buffer 1, filter 1 (See Appendix B for further details)
+        # Rx1IDE2 - flag to indicate Rx1Filter2 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
+        # Rx1Filter2 - receive buffer 1, filter 2 (See Appendix B for further details)
+        # Rx2Mask - receive buffer 2 mask
+        # Rx2IDE1 - flag to indicate Rx2Mask & Rx2Filter1 values are either 11 or 29 bit values (0 = 11 bit ID, 1 = 29 bit ID)
+        # Rx2Filter1 - receive buffer 2, filter 1 (See Appendix B for further details)
+        # Rx2IDE2 - flag to indicate Rx2Filter2 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
+        # Rx2Filter2 - receive buffer 2, filter 2 (See Appendix B for further details)
+        # Rx2IDE3 - flag to indicate Rx2Filter3 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
+        # Rx2Filter3 - receive buffer 2, filter 3 (See Appendix B for further details)
+        # Rx2IDE4 - flag to indicate Rx2Filter4 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
+        # Rx2Filter4 - receive buffer 2, filter 4 (See Appendix B for further details)
+        for can_filter in filters or []:
+            can_id = can_filter["can_id"]
+            can_mask = can_filter["can_mask"]
+            extended = int(can_filter.get("extended", False))
+            if (
+                CANdoSetFilters(
+                    self.CANdoUSBPtr,
+                    0,
+                    CANDO_ID_29_BIT,
+                    0,
+                    CANDO_ID_11_BIT,
+                    0,
+                    0,
+                    CANDO_ID_29_BIT,
+                    0,
+                    CANDO_ID_11_BIT,
+                    0,
+                    CANDO_ID_29_BIT,
+                    0,
+                    CANDO_ID_11_BIT,
+                    0,
+                )
+                != CANDO_SUCCESS
+            ):
+                raise ValueError(f"Failed to set filter: {can_filter}")
 
     def get_status_description(self) -> str:
         sts = "Status unknown"
@@ -389,15 +277,13 @@ class CANDoISO(BusABC):
                 == CANDO_SUCCESS
             ) and self.CANdoStatus.NewFlag == CANDO_DEVICE_STATUS:  # type: ignore
                 # Display new device status
-                sts = (
-                    "  {} S/N {} H/W v{}, S/W v{}, Status = {}, Bus State = {}".format(
-                        self.CANdoUSB.Description.decode("utf-8"),
-                        self.CANdoUSB.SerialNo.decode("utf-8"),
-                        self.CANdoStatus.HardwareVersion / 10,
-                        self.CANdoStatus.SoftwareVersion / 10,
-                        self.CANdoStatus.Status,
-                        self.CANdoStatus.BusState,
-                    )
+                sts = "  {} S/N {} H/W v{}, S/W v{}, Status = {}, Bus State = {}".format(
+                    self.CANdoUSB.Description.decode("utf-8"),
+                    self.CANdoUSB.SerialNo.decode("utf-8"),
+                    self.CANdoStatus.HardwareVersion / 10,
+                    self.CANdoStatus.SoftwareVersion / 10,
+                    self.CANdoStatus.Status,
+                    self.CANdoStatus.BusState,
                 )
 
         return sts
@@ -420,22 +306,15 @@ class CANDoISO(BusABC):
         self.NoOfDevices = c_int(5)  # Look for up to 5 CANdo devices
         # Create an array type of TCANdoDevice for those devices
         self.TCANdoDevices = TCANdoDevice * self.NoOfDevices.value
-        self.CANdoDevices = (
-            self.TCANdoDevices()
-        )  # Create an instance of TCANdoDevices array
+        self.CANdoDevices = self.TCANdoDevices()  # Create an instance of TCANdoDevices array
         # Get a pointer to the TCANdoDevices array
         self.PCANdoDevices = pointer(self.CANdoDevices)
         self.CANdoPID = TCANdoDeviceString()
-        if (
-            CANdoGetDevices(self.PCANdoDevices, byref(self.NoOfDevices))
-            == CANDO_SUCCESS
-        ):
+        if CANdoGetDevices(self.PCANdoDevices, byref(self.NoOfDevices)) == CANDO_SUCCESS:
             for CANdoNo in range(self.NoOfDevices.value):
                 if CANdoGetPID(CANdoNo, byref(self.CANdoPID)) == CANDO_SUCCESS:
                     # PID
-                    log.debug(
-                        f"  Device no. {CANdoNo} >\n    PID = 0x{self.CANdoPID.value.decode('utf-8').upper()}"
-                    )
+                    log.debug(f"  Device no. {CANdoNo} >\n    PID = 0x{self.CANdoPID.value.decode('utf-8').upper()}")
 
                     # H/W type & S/N
                     log.debug(
@@ -450,10 +329,7 @@ class CANDoISO(BusABC):
         bus = CANDoISO(None)
         bus._detect_cando_iso()  # noqa: SLF001
         if bus.NoOfDevices.value > 0:
-            interfaces = [
-                AutoDetectedConfig(interface="candoiso", channel=c)
-                for c in range(bus.NoOfDevices.value)
-            ]
+            interfaces = [AutoDetectedConfig(interface="candoiso", channel=c) for c in range(bus.NoOfDevices.value)]
 
         del bus
 
@@ -465,9 +341,7 @@ class CANDoISO(BusABC):
         self._recv_thread.join()
 
         # CANdo connection is open, so close
-        if not (
-            self.CANdoUSB.OpenFlag and CANdoClose(self.CANdoUSBPtr) == CANDO_SUCCESS
-        ):
+        if not (self.CANdoUSB.OpenFlag and CANdoClose(self.CANdoUSBPtr) == CANDO_SUCCESS):
             log.error("Failed to close connection!")
         else:
             log.debug("Connection closed successfully.")
@@ -509,12 +383,7 @@ class CANDoISO(BusABC):
             self.CANdoStatus.NewFlag = CANDO_NO_STATUS
 
             # Receive CAN messages
-            if (
-                CANdoReceive(
-                    self.CANdoUSBPtr, self.CANdoCANBufferPtr, self.CANdoStatusPtr
-                )
-                != CANDO_SUCCESS
-            ):
+            if CANdoReceive(self.CANdoUSBPtr, self.CANdoCANBufferPtr, self.CANdoStatusPtr) != CANDO_SUCCESS:
                 raise ValueError("Error receiving messages")
 
             read_idx, write_idx, full_flag = (
@@ -544,9 +413,7 @@ class CANDoISO(BusABC):
 
                 # Timestamp - a timestamp indicating the receive time of the message since starting CANdo.
                 # The timestamp resolution is 25.6us per bit.
-                timestamp = (
-                    self.CANdoCANBuffer.CANMessage[read_idx].TimeStamp * ts_resolution
-                ) + self.t_start
+                timestamp = (self.CANdoCANBuffer.CANMessage[read_idx].TimeStamp * ts_resolution) + self.t_start
 
                 if (read_idx + 1) < CANDO_CAN_BUFFER_LENGTH:
                     # Increment index onto next slot
@@ -573,9 +440,7 @@ class CANDoISO(BusABC):
 
             self.CANdoCANBuffer.ReadIndex = read_idx
 
-    def _recv_internal(
-        self, timeout: Optional[float]
-    ) -> Tuple[Optional[Message], bool]:
+    def _recv_internal(self, timeout: Optional[float]) -> Tuple[Optional[Message], bool]:
         try:
             return (self.msg_queue.get(timeout=timeout), True)
         except Empty:
@@ -586,8 +451,19 @@ class CANDoISO(BusABC):
 
 
 def main() -> None:
-    # interfaces = CANDoISO._detect_available_configs()
-    bus = CANDoISO(0)
+    interfaces = CANDoISO._detect_available_configs()  # noqa: SLF001  #type: ignore
+
+    if len(interfaces) == 0:
+        print("No CANdoISO devices detected!")
+        return
+
+    print("Available interfaces:")
+    for i in interfaces:
+        print(f"  {i}")
+    selected = int(input("Select interface: "))
+
+    bus = CANDoISO(selected)
+
     try:
         while True:
             _in = input(
@@ -604,7 +480,7 @@ def main() -> None:
                         arbitration_id=0x1500,
                         data=[1, 2, 3, 4, 5, 6, 7, 8],
                         is_extended_id=True,
-                    )
+                    ),
                 )
             if _in == "r":
                 msg = bus.recv(timeout=1)

@@ -1,0 +1,102 @@
+[build-system]
+build-backend = 'setuptools.build_meta'
+requires = ["setuptools >= 62.0"]
+
+[project]
+name = "python-can-netronics"
+description = "python-can interface for Netronics CANdoISO device"
+readme = "README.md"
+requires-python = ">=3.7"
+license = { text = "LGPL v3" }
+keywords = ["python-can", "CAN", "netronics", "cando", "candoiso"]
+authors = [{ name = "Riccardo Belli", email = "riccardo.belli@solaredge.com" }]
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: Microsoft :: Windows",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
+    "Intended Audience :: Developers",
+]
+dependencies = ["python-can==4.*"]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = ["ruff==0.6.7"]
+
+[project.entry-points."can.interface"]
+cvector = "can_netronics.CANdoISO:CANdoISO"
+
+[project.urls]
+Documentation = "https://github.com/belliriccardo/python-can-netronics#readme"
+Issues = "https://github.com/belliriccardo/python-can-netronics/issues"
+Source = "https://github.com/belliriccardo/python-can-netronics"
+Homepage = "https://github.com/belliriccardo/python-can-netronics"
+
+[tool.setuptools]
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["can_netronics"]
+
+# [tool.setuptools.package-data]
+# can_netronics = ["py.typed", "*.pyi"]
+
+[tool.setuptools.dynamic]
+version = { attr = "can_netronics.__version__" }
+
+# [tool.pytest.ini_options]
+# minversion = "6.0"
+# addopts = "-v"
+# testpaths = ["tests"]
+
+# [tool.cibuildwheel]
+# test-requires = "pytest"
+# test-command = "pytest {project}/tests"
+# build-frontend = "build"
+
+[tool.ruff]
+line-length = 120
+# exclude = ["build/*", "dist/*"]
+select = ["ALL"]
+ignore = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D107",
+    "S603",
+    "T201",
+    "FA102",
+    "TRY003",
+    "TD002",
+    "TD003",
+    "FIX002",
+    "FA100",
+    "ERA001",
+    "N999",
+    "N802",
+    "N806",
+    "N815",
+    "PGH003",
+    "PLR0915",
+    "FBT001",
+    "C901",
+    "ANN401",
+    "EM101",
+    "EM102",
+    "D105",
+    "PLR0912",
+    "FBT002",
+    "BLE001",
+    "PLR0913",
+    "G001",
+    "G004",
+]
+# Enable strict type checking
+[tool.pyright]
+standard = ["**/*.py"]
