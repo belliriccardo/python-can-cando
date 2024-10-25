@@ -268,7 +268,6 @@ class CANDoISO(BusABC):
     def get_status_description(self) -> str:
         sts = "Status unknown"
         if CANdoRequestStatus(self.CANdoUSBPtr) == CANDO_SUCCESS:
-            # if CANdoRequestStatus(pointer(self.CANdoUSB)) == CANDO_SUCCESS:
             # Wait for device to reply #TODO: in the docs it's mentioned that it takes < 1ms to get a response actually
             sleep(0.01)  # Sleep for 10ms
             self.CANdoStatus.NewFlag = CANDO_NO_STATUS  # Clear status flag
