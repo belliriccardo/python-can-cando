@@ -3,7 +3,7 @@ import threading
 from ctypes import byref, c_int, c_ubyte, pointer
 from queue import Empty, Queue
 from time import sleep, time
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from can import BusABC, Message
 from can.typechecking import AutoDetectedConfig, CanFilters
@@ -143,12 +143,13 @@ class CANDoISO(BusABC):
         self.set_filters(can_filters)
 
         self.flush_buffers()
-        sleep(0.01)  # Sleep for 10ms
+        sleep(0.01)
 
         self.clear_status()
         self.set_state(CANDO_RUN)
 
-        self.print_status()
+        # self.print_status()
+        _ = self.get_status_description()
 
         self.t_start = time()
 
@@ -159,7 +160,7 @@ class CANDoISO(BusABC):
         self._recv_thread = threading.Thread(target=self._recv_t, daemon=True)
         self._recv_thread.start()
 
-        log.debug("CANdoISO configured and started successfully!")
+        # log.debug("CANdoISO configured and started successfully!")
 
     def open_device(self, channel: int) -> None:
         # Open a connection to the selected device
@@ -221,6 +222,8 @@ class CANDoISO(BusABC):
 
     def set_filters(self, filters: Optional[CanFilters] = None) -> None:
         log.warning("Filters are not implemented yet, all messages will be received")
+        # Function args for CANdoSetFilters (see docs):
+
         # CANdoUSBPointer - pointer to TCANdoUSB structure
         # Rx1Mask - receive buffer 1 mask
         # Rx1IDE1 - flag to indicate Rx1Mask & Rx1Filter1 values are either 11 or 29 bit values (0 = 11 bit ID, 1 = 29 bit ID)
@@ -236,31 +239,71 @@ class CANDoISO(BusABC):
         # Rx2Filter3 - receive buffer 2, filter 3 (See Appendix B for further details)
         # Rx2IDE4 - flag to indicate Rx2Filter4 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
         # Rx2Filter4 - receive buffer 2, filter 4 (See Appendix B for further details)
-        for can_filter in filters or []:
-            can_id = can_filter["can_id"]
-            can_mask = can_filter["can_mask"]
-            extended = int(can_filter.get("extended", False))
-            if (
-                CANdoSetFilters(
-                    self.CANdoUSBPtr,
-                    0,
-                    CANDO_ID_29_BIT,
-                    0,
-                    CANDO_ID_11_BIT,
-                    0,
-                    0,
-                    CANDO_ID_29_BIT,
-                    0,
-                    CANDO_ID_11_BIT,
-                    0,
-                    CANDO_ID_29_BIT,
-                    0,
-                    CANDO_ID_11_BIT,
-                    0,
-                )
-                != CANDO_SUCCESS
-            ):
-                raise ValueError(f"Failed to set filter: {can_filter}")
+
+        if filters is None:
+            return
+
+        filters_mask_dict: Dict[int, List[Tuple[int, int]]] = {}
+        for flt in filters:
+            can_id = flt["can_id"]
+            can_mask = flt["can_mask"]
+            extended = int(flt.get("extended", False))
+
+            if can_id not in filters_mask_dict:
+                filters_mask_dict[can_id] = [(can_mask, extended)]
+            else:
+                filters_mask_dict[can_id].append((can_mask, extended))
+
+        # Are there more extended or standard filters?
+        n_ext = len({v[1] for v in filters_mask_dict.values() if v[1]})
+        n_std = len({v[1] for v in filters_mask_dict.values() if not v[1]})
+
+        use_2nd_mask_for_ext = False
+        if n_ext > n_std:
+            use_2nd_mask_for_ext = True
+
+        # Default values (pass all filters)
+        Rx1Mask: int = 0
+        Rx1IDE1: int = CANDO_ID_29_BIT
+        Rx1Filter1: int = 0
+        Rx1IDE2: int = CANDO_ID_11_BIT
+        Rx1Filter2: int = 0
+        Rx2Mask: int = 0
+        Rx2IDE1: int = CANDO_ID_29_BIT
+        Rx2Filter1: int = 0
+        Rx2IDE2: int = CANDO_ID_11_BIT
+        Rx2Filter2: int = 0
+        Rx2IDE3: int = CANDO_ID_29_BIT
+        Rx2Filter3: int = 0
+        Rx2IDE4: int = CANDO_ID_11_BIT
+        Rx2Filter4: int = 0
+
+        # for can_filter in filters:
+        #     can_id = can_filter["can_id"]
+        #     can_mask = can_filter["can_mask"]
+        #     extended = int(can_filter.get("extended", False))
+
+        if (
+            CANdoSetFilters(
+                self.CANdoUSBPtr,
+                Rx1Mask,
+                Rx1IDE1,
+                Rx1Filter1,
+                Rx1IDE2,
+                Rx1Filter2,
+                Rx2Mask,
+                Rx2IDE1,
+                Rx2Filter1,
+                Rx2IDE2,
+                Rx2Filter2,
+                Rx2IDE3,
+                Rx2Filter3,
+                Rx2IDE4,
+                Rx2Filter4,
+            )
+            != CANDO_SUCCESS
+        ):
+            raise ValueError("Failed to set can filters!")
 
         # Sleep for 10ms as stated in the docs
         sleep(0.01)
