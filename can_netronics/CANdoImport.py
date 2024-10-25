@@ -25,11 +25,10 @@
 # ------------------------------------------------------------------------------
 import ctypes
 import sys
+from dataclasses import dataclass
 from enum import Enum
 from queue import Queue
-from typing import TYPE_CHECKING, Optional
-
-from can import Message
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 # ------------------------------------------------------------------------------
 # CONSTANTS
@@ -125,7 +124,10 @@ PCANdoDeviceString = ctypes.POINTER(TCANdoDeviceString)  # Pointer type to CANdo
 
 # Type used to store device H/W type & S/N for connected CANdo
 class TCANdoDevice(ctypes.Structure):
-    _fields_ = [("HardwareType", ctypes.c_int), ("SerialNo", TCANdoDeviceString)]
+    _fields_ = [
+        ("HardwareType", ctypes.c_int),
+        ("SerialNo", TCANdoDeviceString),
+    ]
 
 
 PCANdoDevice = ctypes.POINTER(TCANdoDevice)  # Pointer type to TCANdoDevice
@@ -305,18 +307,20 @@ CANdoReceive.argtypes = [PCANdoUSB, PCANdoCANBuffer, PCANdoStatus]
 # ------------------------------------------------------------------------------
 # TYPE CHECKING AND TYPE ALIASES
 # ------------------------------------------------------------------------------
+TCanDoMsg = Tuple[float, int, bool, bool, int, bytearray]
+
 if TYPE_CHECKING:
-    CANdoUSBPtrType = ctypes._Pointer[TCANdoUSB]  # type: ignore
-    CANdoCANBufferPtrType = ctypes._Pointer[TCANdoCANBuffer]  # type: ignore
-    CANdoStatusPtrType = ctypes._Pointer[TCANdoStatus]  # type: ignore
+    CANdoUSBPtrType = ctypes._Pointer[TCANdoUSB]
+    CANdoCANBufferPtrType = ctypes._Pointer[TCANdoCANBuffer]
+    CANdoStatusPtrType = ctypes._Pointer[TCANdoStatus]
 else:
     CANdoUSBPtrType = ctypes.POINTER(TCANdoUSB)
     CANdoCANBufferPtrType = ctypes.POINTER(TCANdoCANBuffer)
     CANdoStatusPtrType = ctypes.POINTER(TCANdoStatus)
 
 if sys.version_info >= (3, 9):
-    CANdoPIDType = ctypes.Array[ctypes.c_char]
-    MsgQueueType = Queue[Message]
+    CANdoPIDType = ctypes.Array[ctypes.c_char]  # novermin
+    MsgQueueType = Queue[TCanDoMsg]  # novermin
 else:
     CANdoPIDType = ctypes.Array
     MsgQueueType = Queue
@@ -325,20 +329,26 @@ else:
 # ------------------------------------------------------------------------------
 # BIT TIMINGS UTILITIES
 # ------------------------------------------------------------------------------
+
+
+@dataclass
 class CANDoISOBusTiming:
-    def __init__(self, brp: int, propseg: int, phseg1: int, phseg2: int, sjw: int, sam: int) -> None:
-        self.brp = brp
-        self.propseg = propseg
-        self.phseg1 = phseg1
-        self.phseg2 = phseg2
-        self.sjw = sjw
-        self.sam = sam
-        self.f_clock = CANDOISO_F_CLOCK
-        self.baud = self.f_clock / (2 * (brp + 1) * (4 + propseg + phseg1 + phseg2))
+    # The same order as they appear in CANdoISO's application
+    brp: int
+    propseg: int
+    phseg1: int
+    phseg2: int
+    sjw: int
+    sam: int
+    f_clock = CANDOISO_F_CLOCK
+
+    @property
+    def baud(self) -> float:
+        return self.f_clock / (2 * (self.brp + 1) * (4 + self.propseg + self.phseg1 + self.phseg2))
 
 
 # Values start at 0 for these timings, see docs
-CANDOISO_COMMON_TIMINGS: dict[int, dict[Optional[int], CANDoISOBusTiming]] = {
+CANDOISO_COMMON_TIMINGS: Dict[int, Dict[Optional[int], CANDoISOBusTiming]] = {
     # TODO: Add these as well
     # 12500: CANDoISOBusTiming(...),
     # 20000: CANDoISOBusTiming(...),
@@ -362,8 +372,9 @@ def candoiso_get_timing(bitrate: int, sample_point: Optional[int] = None) -> CAN
     avail_bitrates = CANDOISO_COMMON_TIMINGS[bitrate]
 
     if sample_point is None:
-        if len(avail_bitrates) != 1:
-            raise ValueError(f"Sample point must be specified for bitrate {bitrate}")
+        # if len(avail_bitrates) == 1:
+        #     raise ValueError(f"Sample point must be specified for bitrate {bitrate}")
+
         return next(iter(avail_bitrates.values()))
     if sample_point not in avail_bitrates:
         raise ValueError(f"Sample point {sample_point} not supported for bitrate {bitrate}")
