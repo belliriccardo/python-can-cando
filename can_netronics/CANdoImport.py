@@ -357,9 +357,9 @@ CANDOISO_COMMON_TIMINGS: Dict[int, Dict[Optional[int], CANDoISOBusTiming]] = {
     125000: {None: CANDoISOBusTiming(7, 4, 7, 5, 0, 0)},  # Sample point not specified
     250000: {None: CANDoISOBusTiming(3, 4, 7, 5, 0, 0)},  # Sample point not specified
     500000: {
-        70: CANDoISOBusTiming(1, 4, 7, 5, 0, 0),  # Sample point at 70%
-        80: CANDoISOBusTiming(3, 2, 3, 1, 0, 0),  # Sample point at 80%
-        85: CANDoISOBusTiming(1, 7, 7, 2, 0, 0),  # Sample point at 85%
+        70: CANDoISOBusTiming(0, 4, 7, 5, 0, 0),  # Sample point at 70%
+        80: CANDoISOBusTiming(1, 2, 3, 1, 0, 0),  # Sample point at 80%
+        85: CANDoISOBusTiming(0, 7, 7, 2, 0, 0),  # Sample point at 85%
     },
     1000000: {None: CANDoISOBusTiming(1, 1, 3, 2, 0, 0)},  # Sample point not specified
 }
