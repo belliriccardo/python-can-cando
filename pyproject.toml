@@ -60,7 +60,7 @@ version = { attr = "can_netronics.__version__" }
 # build-frontend = "build"
 
 [tool.ruff]
-line-length = 120
+line-length = 140
 # exclude = ["build/*", "dist/*"]
 select = ["ALL"]
 ignore = [
@@ -80,6 +80,7 @@ ignore = [
     "ERA001",
     "N999",
     "N802",
+    "N803",
     "N806",
     "N815",
     "PGH003",
@@ -101,4 +102,4 @@ ignore = [
 ]
 # Enable strict type checking
 [tool.pyright]
-standard = ["**/*.py"]
+strict = ["**/*.py"]

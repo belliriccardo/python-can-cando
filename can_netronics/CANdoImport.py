@@ -14,6 +14,7 @@
 #  22/01/21 Created (Martyn Brown)
 #  01/10/24 Modified for python-can compatibility, type
 #           hinting and error codes (Riccardo Belli)
+#  TODO: credits?
 #
 #  LICENSE :-
 #  The SDK (Software Development Kit) provided for use with the CANdo device
@@ -205,6 +206,10 @@ CANdoGetPID = lib.CANdoGetPID
 CANdoGetPID.argtypes = [ctypes.c_int, PCANdoDeviceString]
 CANdoGetDevices = lib.CANdoGetDevices
 CANdoGetDevices.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int)]
+
+# The CANdoOpen(...) function returns a connection to the first free CANdo device found, regardless
+# of hardware type or serial number.The CANdoOpenDevice(...) function allows a particular CANdo
+# device to be selected based on hardware type, serial number or both.
 CANdoOpen = lib.CANdoOpen
 CANdoOpen.argtypes = [PCANdoUSB]
 CANdoOpenDevice = lib.CANdoOpenDevice
@@ -253,6 +258,23 @@ CANdoRequestDateStatus = lib.CANdoRequestDateStatus
 CANdoRequestDateStatus.argtypes = [PCANdoUSB]
 CANdoRequestBusLoadStatus = lib.CANdoRequestBusLoadStatus
 CANdoRequestBusLoadStatus.argtypes = [PCANdoUSB]
+CANdoTransmit = lib.CANdoTransmit
+CANdoTransmit.argtypes = [
+    PCANdoUSB,
+    ctypes.c_ubyte,
+    ctypes.c_uint,
+    ctypes.c_ubyte,
+    ctypes.c_ubyte,
+    ctypes.POINTER(ctypes.c_ubyte),
+    ctypes.c_ubyte,
+    ctypes.c_ubyte,
+]
+CANdoReceive = lib.CANdoReceive
+CANdoReceive.argtypes = [PCANdoUSB, PCANdoCANBuffer, PCANdoStatus]
+
+# ------------------------------------------------------------------------------
+# CANdo AUTO DEVICE FUNCTIONS (UNUSED IN THIS MODULE)
+# ------------------------------------------------------------------------------
 CANdoRequestSetupStatus = lib.CANdoRequestSetupStatus
 CANdoRequestSetupStatus.argtypes = [PCANdoUSB]
 CANdoRequestAnalogInputStatus = lib.CANdoRequestAnalogInputStatus
@@ -288,19 +310,6 @@ CANdoTransmitStoreWrite.argtypes = [
 ]
 CANdoTransmitStoreClear = lib.CANdoTransmitStoreClear
 CANdoTransmitStoreClear.argtypes = [PCANdoUSB]
-CANdoTransmit = lib.CANdoTransmit
-CANdoTransmit.argtypes = [
-    PCANdoUSB,
-    ctypes.c_ubyte,
-    ctypes.c_uint,
-    ctypes.c_ubyte,
-    ctypes.c_ubyte,
-    ctypes.POINTER(ctypes.c_ubyte),
-    ctypes.c_ubyte,
-    ctypes.c_ubyte,
-]
-CANdoReceive = lib.CANdoReceive
-CANdoReceive.argtypes = [PCANdoUSB, PCANdoCANBuffer, PCANdoStatus]
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 
@@ -310,9 +319,9 @@ CANdoReceive.argtypes = [PCANdoUSB, PCANdoCANBuffer, PCANdoStatus]
 TCanDoMsg = Tuple[float, int, bool, bool, int, bytearray]
 
 if TYPE_CHECKING:
-    CANdoUSBPtrType = ctypes._Pointer[TCANdoUSB]
-    CANdoCANBufferPtrType = ctypes._Pointer[TCANdoCANBuffer]
-    CANdoStatusPtrType = ctypes._Pointer[TCANdoStatus]
+    CANdoUSBPtrType = ctypes._Pointer[TCANdoUSB]  # type: ignore
+    CANdoCANBufferPtrType = ctypes._Pointer[TCANdoCANBuffer]  # type: ignore
+    CANdoStatusPtrType = ctypes._Pointer[TCANdoStatus]  # type: ignore
 else:
     CANdoUSBPtrType = ctypes.POINTER(TCANdoUSB)
     CANdoCANBufferPtrType = ctypes.POINTER(TCANdoCANBuffer)
@@ -321,9 +330,11 @@ else:
 if sys.version_info >= (3, 9):
     CANdoPIDType = ctypes.Array[ctypes.c_char]  # novermin
     MsgQueueType = Queue[TCanDoMsg]  # novermin
+    MsgDataType = ctypes.Array[ctypes.c_ubyte]  # novermin
 else:
     CANdoPIDType = ctypes.Array
     MsgQueueType = Queue
+    MsgDataType = ctypes.Array
 
 
 # ------------------------------------------------------------------------------

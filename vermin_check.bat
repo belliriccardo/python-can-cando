@@ -1,1 +1,1 @@
-vermin --backport dataclasses --backport enum --backport typing --eval-annotations .\can_netronics\
+vermin -vvv --backport dataclasses --backport enum --backport typing --eval-annotations .\can_netronics\
