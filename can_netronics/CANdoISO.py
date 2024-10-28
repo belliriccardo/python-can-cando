@@ -131,7 +131,7 @@ class CANDoISO(BusABC):
         self.CANdoStatus = TCANdoStatus()
         self.CANdoStatusPtr = pointer(self.CANdoStatus)
 
-        self.open_device(channel)
+        self.cando_open_device(channel)
 
         if not self.CANdoUSB.OpenFlag:
             raise ValueError("Device not open!")
@@ -164,7 +164,28 @@ class CANDoISO(BusABC):
 
         # log.debug("CANdoISO configured and started successfully!")
 
-    def open_device(self, channel: int) -> None:
+    def cando_open_device(self, channel: int) -> None:
+        """Allow a connection to a specific CANdo device.
+
+        Opens a connection to the CANdo device specified by the hardware type &
+        serial number passed into the function via the CANdoDevicePointer
+        parameter. If successful the function returns a handle to the connected
+        device, together with the device description & the serial number, via the
+        CANdoUSBPointer parameter. In addition, the hardware type of the
+        connected device is returned via the CANdoDevicePointer parameter.
+
+        The CANdoDevice structure passed into the function contains fields for
+        hardware type & serial number. To uniquely specify a CANdo device for
+        connection, both fields must be populated. To select a particular hardware
+        type only, the serial number maybe set to an empty string (“”), the function
+        will then connect to the next free device matching the selected hardware
+        type. To select a device with a specific serial number regardless of hardware
+        type, the hardware type maybe set to CANDO_TYPE_ANY. A call to this
+        function with the serial number set to an empty string & the hardware type
+        set to CANDO_TYPE_ANY is equivalent to a call to the CANdoOpen(...)
+        function, except that the hardware type of the connected device is returned
+        via the CANdoDevicePointer parameter.
+        """
         # Open a connection to the selected device
         if CANdoOpenDevice(self.CANdoUSBPtr, byref(self.CANdoDevices[channel])) == CANDO_SUCCESS:
             log.debug(
@@ -174,183 +195,47 @@ class CANDoISO(BusABC):
             raise ValueError("Device unavailable")
 
     def set_timings(self) -> None:
-        # CANdo connection is open, so configure for a CAN baud rate of 250k & set the filters to receive all messages
-        # SJW - sync. jump width, 0 - 3. (This is the width of the synchronisation jump used by the CAN module to
-        # achieve synchronisation. 0 = 1 jump bit … 3 = 4 jump bits)
-        # BRP - baud rate prescaler, 0 - 63 for a CANdo device, 0 - 31 & 64 - 127 for a CANdoISO or CANdo AUTO device
-        # (See description below)
-        # PHSEG1 - phase segment 1, 0 - 7 (See description below)
-        # PHSEG2 - phase segment 2, 0 - 7 (See description below)
-        # PROPSEG - propagation segment, 0 - 7 (See description below)
-        # SAM - number of samples per data bit, 0 - 1 (0 = Sample each data bit once, 1 = Sample each data bit thrice)
-        if (
-            CANdoSetBaudRate(
-                self.CANdoUSBPtr,
-                self.bit_timing.sjw,
-                self.bit_timing.brp,
-                self.bit_timing.phseg1,
-                self.bit_timing.phseg2,
-                self.bit_timing.propseg,
-                self.bit_timing.sam,
-            )
-            != CANDO_SUCCESS
-        ):
-            raise ValueError("Failed to set baud rate!")
-
-        # The docs state that if the new settings differ from the current settings, the device can take up
-        # to 100ms to store the new settings, during which time the device will not accept to any new commands.
-        sleep(0.1)
-
-    def set_mode(self, mode: int) -> None:
-        """Set the decice's operating mode.
-
-        :param mode: operating mode, 0 - 2 (0 = Normal, 1 = Listen only, 2 = Loopback)
-        """
-        if mode not in (
-            CANDO_NORMAL_MODE,
-            CANDO_LISTEN_ONLY_MODE,
-            CANDO_LOOPBACK_MODE,
-        ):
-            raise ValueError(f"Invalid mode: {mode}")
-
-        ret_val = CANdoSetMode(self.CANdoUSBPtr, mode)
-
-        if ret_val != CANDO_SUCCESS:
-            log.error(f"Failed to set mode: {mode}, error code: {ret_val}")
-            raise ValueError(f"Failed to set mode: {mode}")
-
-        sleep(0.01)  # Sleep for 10ms if the mode was changed
-
-    def flush_buffers(self) -> None:
-        """Flushes the internal USB read & write buffers.
-
-        :raises ValueError: if the device is not open
-        """
-        if not self.CANdoUSB.OpenFlag:
-            raise ValueError("Device not open!")
-
-        if CANdoFlushBuffers(self.CANdoUSBPtr) != CANDO_SUCCESS:
-            log.error("Failed to flush buffers!")
-
-    def flush_tx_buffer(self) -> None:
-        """Discard every message that may be queued in the output buffer(s)."""
-        # Overridden from BusABC
-        self.flush_buffers()
-
-    def set_filters(self, filters: Optional[CanFilters] = None) -> None:
-        log.warning("Filters are not implemented yet, all messages will be received")
-
-        # CANdoUSBPointer - pointer to TCANdoUSB structure
-        # Rx1Mask - receive buffer 1 mask
-        # Rx1IDE1 - flag to indicate Rx1Mask & Rx1Filter1 values are either 11 or 29 bit values (0 = 11 bit ID, 1 = 29 bit ID)
-        # Rx1Filter1 - receive buffer 1, filter 1 (See Appendix B for further details)
-        # Rx1IDE2 - flag to indicate Rx1Filter2 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
-        # Rx1Filter2 - receive buffer 1, filter 2 (See Appendix B for further details)
-        # Rx2Mask - receive buffer 2 mask
-        # Rx2IDE1 - flag to indicate Rx2Mask & Rx2Filter1 values are either 11 or 29 bit values (0 = 11 bit ID, 1 = 29 bit ID)
-        # Rx2Filter1 - receive buffer 2, filter 1 (See Appendix B for further details)
-        # Rx2IDE2 - flag to indicate Rx2Filter2 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
-        # Rx2Filter2 - receive buffer 2, filter 2 (See Appendix B for further details)
-        # Rx2IDE3 - flag to indicate Rx2Filter3 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
-        # Rx2Filter3 - receive buffer 2, filter 3 (See Appendix B for further details)
-        # Rx2IDE4 - flag to indicate Rx2Filter4 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
-        # Rx2Filter4 - receive buffer 2, filter 4 (See Appendix B for further details)
-
-        if filters is None:
-            return
-
-        filters_mask_dict: Dict[int, List[Tuple[int, int]]] = {}
-        for flt in filters:
-            can_id = flt["can_id"]
-            can_mask = flt["can_mask"]
-            extended = int(flt.get("extended", False))
-
-            if can_id not in filters_mask_dict:
-                filters_mask_dict[can_id] = [(can_mask, extended)]
-            else:
-                filters_mask_dict[can_id].append((can_mask, extended))
-
-        # Are there more extended or standard filters?
-        n_ext = len({v[1] for v in filters_mask_dict.values() if v[1]})
-        n_std = len({v[1] for v in filters_mask_dict.values() if not v[1]})
-
-        use_2nd_mask_for_ext = False
-        if n_ext > n_std:
-            use_2nd_mask_for_ext = True
-
-        del use_2nd_mask_for_ext  # TODO: Implement this
-
-        # Default values (pass all filters)
-        Rx1Mask: int = 0
-        Rx1IDE1: int = CANDO_ID_29_BIT
-        Rx1Filter1: int = 0
-        Rx1IDE2: int = CANDO_ID_11_BIT
-        Rx1Filter2: int = 0
-        Rx2Mask: int = 0
-        Rx2IDE1: int = CANDO_ID_29_BIT
-        Rx2Filter1: int = 0
-        Rx2IDE2: int = CANDO_ID_11_BIT
-        Rx2Filter2: int = 0
-        Rx2IDE3: int = CANDO_ID_29_BIT
-        Rx2Filter3: int = 0
-        Rx2IDE4: int = CANDO_ID_11_BIT
-        Rx2Filter4: int = 0
-
-        # for can_filter in filters:
-        #     can_id = can_filter["can_id"]
-        #     can_mask = can_filter["can_mask"]
-        #     extended = int(can_filter.get("extended", False))
-
-        self.set_CANdoISO_filters(
-            Rx1Mask=Rx1Mask,
-            Rx1IDE1=Rx1IDE1,
-            Rx1Filter1=Rx1Filter1,
-            Rx1IDE2=Rx1IDE2,
-            Rx1Filter2=Rx1Filter2,
-            Rx2Mask=Rx2Mask,
-            Rx2IDE1=Rx2IDE1,
-            Rx2Filter1=Rx2Filter1,
-            Rx2IDE2=Rx2IDE2,
-            Rx2Filter2=Rx2Filter2,
-            Rx2IDE3=Rx2IDE3,
-            Rx2Filter3=Rx2Filter3,
-            Rx2IDE4=Rx2IDE4,
-            Rx2Filter4=Rx2Filter4,
+        # Wrapper for BusABC
+        self.cando_set_baudrate(
+            self.bit_timing.sjw,
+            self.bit_timing.brp,
+            self.bit_timing.phseg1,
+            self.bit_timing.phseg2,
+            self.bit_timing.propseg,
+            self.bit_timing.sam,
         )
 
-    def set_CANdoISO_filters(
+    def cando_set_baudrate(
         self,
-        Rx1Mask: int = 0,
-        Rx1IDE1: int = CANDO_ID_29_BIT,
-        Rx1Filter1: int = 0,
-        Rx1IDE2: int = CANDO_ID_11_BIT,
-        Rx1Filter2: int = 0,
-        Rx2Mask: int = 0,
-        Rx2IDE1: int = CANDO_ID_29_BIT,
-        Rx2Filter1: int = 0,
-        Rx2IDE2: int = CANDO_ID_11_BIT,
-        Rx2Filter2: int = 0,
-        Rx2IDE3: int = CANDO_ID_29_BIT,
-        Rx2Filter3: int = 0,
-        Rx2IDE4: int = CANDO_ID_11_BIT,
-        Rx2Filter4: int = 0,
+        sjw: int,
+        brp: int,
+        phseg1: int,
+        phseg2: int,
+        propseg: int,
+        sam: int,
     ) -> None:
         """Set the CAN bus baud rate (BR) & bit sampling point (SP).
 
-        :param Rx1Mask: - receive buffer 1 mask
-        :param Rx1IDE1: - flag to indicate Rx1Mask & Rx1Filter1 values are either 11 or 29 bit values (0 = 11 bit ID, 1 = 29 bit ID)
-        :param Rx1Filter1: - receive buffer 1, filter 1 (See Appendix B for further details)
-        :param Rx1IDE2: - flag to indicate Rx1Filter2 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
-        :param Rx1Filter2: - receive buffer 1, filter 2 (See Appendix B for further details)
-        :param Rx2Mask: - receive buffer 2 mask
-        :param Rx2IDE1: - flag to indicate Rx2Mask & Rx2Filter1 values are either 11 or 29 bit values (0 = 11 bit ID, 1 = 29 bit ID)
-        :param Rx2Filter1: - receive buffer 2, filter 1 (See Appendix B for further details)
-        :param Rx2IDE2: - flag to indicate Rx2Filter2 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
-        :param Rx2Filter2: - receive buffer 2, filter 2 (See Appendix B for further details)
-        :param Rx2IDE3: - flag to indicate Rx2Filter3 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
-        :param Rx2Filter3: - receive buffer 2, filter 3 (See Appendix B for further details)
-        :param Rx2IDE4: - flag to indicate Rx2Filter4 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
-        :param Rx2Filter4: - receive buffer 2, filter 4 (See Appendix B for further details)
+        :param sjw: - sync. jump width, 0 - 3. (This is the width of the synchronisation jump
+        used by the CAN module to achieve synchronisation. 0 = 1 jump bit ... 3 = 4
+        jump bits)
+
+        :param brp: - baud rate prescaler, 0 - 63 for a CANdo device, 0 - 31 & 64 - 127 for
+        a CANdoISO or CANdo AUTO device (See description below)
+
+        :param phseg1: - phase segment 1, 0 - 7 (See description below)
+
+        :param phseg2: - phase segment 2, 0 - 7 (See description below)
+
+        :param propseg: - propagation segment, 0 - 7 (See description below)
+
+        :param sam: - number of samples per data bit, 0 - 1 (0 = Sample each data bit
+        once, 1 = Sample each data bit thrice)
+
+        NOTE : All these CAN register values are 0 based, so that 0 actually equals
+        1. For example, a PHSEG1 value of 3 equates to a 4 PHSEG1 segments in
+        the CAN bit timing. The equations shown below all expect the 0 based
+        values.
 
         According to the following equation:
 
@@ -409,6 +294,160 @@ class CANDoISO(BusABC):
         'CAN Setup' page all start at 1, while those used in the SDK all start at 0.
         """
         if (
+            CANdoSetBaudRate(
+                self.CANdoUSBPtr,
+                sjw,
+                brp,
+                phseg1,
+                phseg2,
+                propseg,
+                sam,
+            )
+            != CANDO_SUCCESS
+        ):
+            raise ValueError("Failed to set baud rate!")
+
+        # The docs state that if the new settings differ from the current settings, the device can take up
+        # to 100ms to store the new settings, during which time the device will not accept to any new commands.
+        sleep(0.1)
+
+    def set_mode(self, mode: int) -> None:
+        """Set the decice's operating mode.
+
+        :param mode: operating mode, 0 - 2 (0 = Normal, 1 = Listen only, 2 = Loopback)
+        """
+        if mode not in (
+            CANDO_NORMAL_MODE,
+            CANDO_LISTEN_ONLY_MODE,
+            CANDO_LOOPBACK_MODE,
+        ):
+            raise ValueError(f"Invalid mode: {mode}")
+
+        ret_val = CANdoSetMode(self.CANdoUSBPtr, mode)
+
+        if ret_val != CANDO_SUCCESS:
+            log.error(f"Failed to set mode: {mode}, error code: {ret_val}")
+            raise ValueError(f"Failed to set mode: {mode}")
+
+        sleep(0.01)  # Sleep for 10ms if the mode was changed
+
+    def flush_buffers(self) -> None:
+        """Flushes the internal USB read & write buffers.
+
+        :raises ValueError: if the device is not open
+        """
+        if not self.CANdoUSB.OpenFlag:
+            raise ValueError("Device not open!")
+
+        if CANdoFlushBuffers(self.CANdoUSBPtr) != CANDO_SUCCESS:
+            log.error("Failed to flush buffers!")
+
+    def flush_tx_buffer(self) -> None:
+        """Discard every message that may be queued in the output buffer(s)."""
+        # Overridden from BusABC
+        self.flush_buffers()
+
+    def set_filters(self, filters: Optional[CanFilters] = None) -> None:
+        # TODO: Implement
+        log.warning("Filters are not implemented yet, all messages will be received")
+
+        if filters is None:
+            return
+
+        filters_mask_dict: Dict[int, List[Tuple[int, int]]] = {}
+        for flt in filters:
+            can_id = flt["can_id"]
+            can_mask = flt["can_mask"]
+            extended = int(flt.get("extended", False))
+
+            if can_id not in filters_mask_dict:
+                filters_mask_dict[can_id] = [(can_mask, extended)]
+            else:
+                filters_mask_dict[can_id].append((can_mask, extended))
+
+        # Are there more extended or standard filters?
+        n_ext = len({v[1] for v in filters_mask_dict.values() if v[1]})
+        n_std = len({v[1] for v in filters_mask_dict.values() if not v[1]})
+
+        use_2nd_mask_for_ext = False
+        if n_ext > n_std:
+            use_2nd_mask_for_ext = True
+
+        del use_2nd_mask_for_ext  # TODO: Implement this
+
+        # Default values (pass all filters)
+        Rx1Mask: int = 0
+        Rx1IDE1: int = CANDO_ID_29_BIT
+        Rx1Filter1: int = 0
+        Rx1IDE2: int = CANDO_ID_11_BIT
+        Rx1Filter2: int = 0
+        Rx2Mask: int = 0
+        Rx2IDE1: int = CANDO_ID_29_BIT
+        Rx2Filter1: int = 0
+        Rx2IDE2: int = CANDO_ID_11_BIT
+        Rx2Filter2: int = 0
+        Rx2IDE3: int = CANDO_ID_29_BIT
+        Rx2Filter3: int = 0
+        Rx2IDE4: int = CANDO_ID_11_BIT
+        Rx2Filter4: int = 0
+
+        # for can_filter in filters:
+        #     can_id = can_filter["can_id"]
+        #     can_mask = can_filter["can_mask"]
+        #     extended = int(can_filter.get("extended", False))
+
+        self.cando_set_filters(
+            Rx1Mask=Rx1Mask,
+            Rx1IDE1=Rx1IDE1,
+            Rx1Filter1=Rx1Filter1,
+            Rx1IDE2=Rx1IDE2,
+            Rx1Filter2=Rx1Filter2,
+            Rx2Mask=Rx2Mask,
+            Rx2IDE1=Rx2IDE1,
+            Rx2Filter1=Rx2Filter1,
+            Rx2IDE2=Rx2IDE2,
+            Rx2Filter2=Rx2Filter2,
+            Rx2IDE3=Rx2IDE3,
+            Rx2Filter3=Rx2Filter3,
+            Rx2IDE4=Rx2IDE4,
+            Rx2Filter4=Rx2Filter4,
+        )
+
+    def cando_set_filters(
+        self,
+        Rx1Mask: int = 0,
+        Rx1IDE1: int = CANDO_ID_29_BIT,
+        Rx1Filter1: int = 0,
+        Rx1IDE2: int = CANDO_ID_11_BIT,
+        Rx1Filter2: int = 0,
+        Rx2Mask: int = 0,
+        Rx2IDE1: int = CANDO_ID_29_BIT,
+        Rx2Filter1: int = 0,
+        Rx2IDE2: int = CANDO_ID_11_BIT,
+        Rx2Filter2: int = 0,
+        Rx2IDE3: int = CANDO_ID_29_BIT,
+        Rx2Filter3: int = 0,
+        Rx2IDE4: int = CANDO_ID_11_BIT,
+        Rx2Filter4: int = 0,
+    ) -> None:
+        """Set the CANdo(ISO) filters.
+
+        :param Rx1Mask: - receive buffer 1 mask
+        :param Rx1IDE1: - flag to indicate Rx1Mask & Rx1Filter1 values are either 11 or 29 bit values (0 = 11 bit ID, 1 = 29 bit ID)
+        :param Rx1Filter1: - receive buffer 1, filter 1 (See Appendix B for further details)
+        :param Rx1IDE2: - flag to indicate Rx1Filter2 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
+        :param Rx1Filter2: - receive buffer 1, filter 2 (See Appendix B for further details)
+        :param Rx2Mask: - receive buffer 2 mask
+        :param Rx2IDE1: - flag to indicate Rx2Mask & Rx2Filter1 values are either 11 or 29 bit values (0 = 11 bit ID, 1 = 29 bit ID)
+        :param Rx2Filter1: - receive buffer 2, filter 1 (See Appendix B for further details)
+        :param Rx2IDE2: - flag to indicate Rx2Filter2 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
+        :param Rx2Filter2: - receive buffer 2, filter 2 (See Appendix B for further details)
+        :param Rx2IDE3: - flag to indicate Rx2Filter3 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
+        :param Rx2Filter3: - receive buffer 2, filter 3 (See Appendix B for further details)
+        :param Rx2IDE4: - flag to indicate Rx2Filter4 value is either an 11 or 29 bit value (0 = 11 bit ID, 1 = 29 bit ID)
+        :param Rx2Filter4: - receive buffer 2, filter 4 (See Appendix B for further details)
+        """
+        if (
             CANdoSetFilters(
                 self.CANdoUSBPtr,
                 Rx1Mask,
@@ -433,7 +472,7 @@ class CANDoISO(BusABC):
         # Sleep for 10ms as stated in the docs
         sleep(0.01)
 
-    def candoiso_request_status(self) -> None:
+    def cando_request_status(self) -> None:
         """Request the CAN bus & internal CANdo status.
 
         After sending this command to CANdo, the status is transmitted back to the
@@ -451,7 +490,7 @@ class CANDoISO(BusABC):
         # to have it there.
         pass
 
-    def candoiso_get_date_status(self) -> None:
+    def cando_get_date_status(self) -> None:
         """Request the date of manufacture of the CANdo device.
 
         After sending this command to CANdo, the date status is transmitted back to
@@ -462,7 +501,7 @@ class CANDoISO(BusABC):
         # TODO: Use "CANdoRequestDateStatus" function
         pass
 
-    def candoiso_request_bus_load_status(self) -> None:
+    def cando_request_bus_load_status(self) -> None:
         """Request the CAN bus loading as calculated by connected device.
 
         The bus load is calculated every second, while the device is running.

@@ -1,2 +1,2 @@
 # python-can-netronics
-Interface for Netronics devices, like CANdoISO
+Interface for [netronics](http://www.netronics.ltd.uk/)' can adapters, namely the [CANdo](https://www.cananalyser.co.uk/cando.html) and [CANdoISO](https://www.cananalyser.co.uk/candoiso.html) devices.
