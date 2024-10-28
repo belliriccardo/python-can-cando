@@ -27,7 +27,7 @@
 import ctypes
 import sys
 from dataclasses import dataclass
-from enum import Enum
+from enum import IntEnum
 from queue import Queue
 from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
@@ -37,45 +37,64 @@ from typing import TYPE_CHECKING, Dict, Optional, Tuple
 # CANdoOpen function constants
 CANDO_CLOSED = 0  # USB channel closed
 CANDO_OPEN = 1  # USB channel open
+
 # CANdoSetState function constants
 CANDO_STOP = 0  # Stop Rx/Tx of CAN messages
 CANDO_RUN = 1  # Start Rx/Tx of CAN messages
+
 # CANdo status message constants
 CANDO_CLEAR = 0  # Status message flag clear
 CANDO_SET = 1  # Status message flag set
-# CANdoSetMode function constants
-CANDO_NORMAL_MODE = 0  # Rx/Tx CAN mode
-CANDO_LISTEN_ONLY_MODE = 1  # Rx only mode, no ACKs
-CANDO_LOOPBACK_MODE = 2  # Tx internally looped back to Rx
+
+
+class CANdoMode(IntEnum):
+    # CANdoSetMode function constants
+    CANDO_NORMAL_MODE = 0  # Rx/Tx CAN mode
+    CANDO_LISTEN_ONLY_MODE = 1  # Rx only mode, no ACKs
+    CANDO_LOOPBACK_MODE = 2  # Tx internally looped back to Rx
+
+
 # CANdo baud rate & bus load constants
 # CANdo clk. freq. in kHz for baud rate calc.
 CANDO_CLK_FREQ = 20000
+
 # CANdoISO & CANdo AUTO clk. freq. in kHz for baud rate calc.
 CANDO_CLK_FREQ_HIGH = 40000
+
 # CANdoISO clock frequency in Hz
 CANDOISO_F_CLOCK = CANDO_CLK_FREQ_HIGH * 1000
 CAN_MSG_TIMESTAMP_RESOLUTION = 25.6e-6  # Timestamp resolution is 25.6us per bit
+
+# TODO: check
 # BRP enhanced baud rate setting offset (CANdoISO & CANdo AUTO only)
 CANDO_BRP_ENHANCED_OFFSET = 63
+
 # CANdo AUTO Module constants
 CANDO_AUTO_V1_INPUT = 1  # V1 analogue I/P
 CANDO_AUTO_V2_INPUT = 2  # V2 analogue I/P
 CANDO_AUTO_MAX_NO_OF_TX_ITEMS = 10  # Max. no. of items in CAN Transmit store
 CANDO_AUTO_ANALOG_INPUT_RESOLUTION = 0.0315  # Analogue I/P resolution 31.5mV
+
 # CAN message constants
 CANDO_ID_11_BIT = 0  # Standard 11 bit ID
 CANDO_ID_29_BIT = 1  # Extended 29 bit ID
 CANDO_DATA_FRAME = 0  # CAN data frame
 CANDO_REMOTE_FRAME = 1  # CAN remote frame
+
 # CANdo buffer lengths
 CANDO_CAN_BUFFER_LENGTH = 2048  # Size of CAN message receive cyclic buffer
 CANDO_MAX_STRING_SIZE = 256  # Max. no. of bytes in a string returned by the device
-# CANdo H/W types
-CANDO_TYPE_ANY = 0x0000  # Any H/W type
-CANDO_TYPE_CANDO = 0x0001  # CANdo H/W type
-CANDO_TYPE_CANDOISO = 0x0002  # CANdoISO H/W type
-CANDO_TYPE_CANDO_AUTO = 0x0003  # CANdo AUTO H/W type
-CANDO_TYPE_UNKNOWN = 0x8000  # Unknown H/W type
+
+
+class CANdoHWType(IntEnum):
+    # CANdo H/W types
+    CANDO_TYPE_ANY = 0x0000  # Any H/W type
+    CANDO_TYPE_CANDO = 0x0001  # CANdo H/W type
+    CANDO_TYPE_CANDOISO = 0x0002  # CANdoISO H/W type
+    CANDO_TYPE_CANDO_AUTO = 0x0003  # CANdo AUTO H/W type
+    CANDO_TYPE_UNKNOWN = 0x8000  # Unknown H/W type
+
+
 # CANdo status types
 CANDO_NO_STATUS = 0  # No new status received
 CANDO_DEVICE_STATUS = 1  # Device status received
@@ -83,39 +102,62 @@ CANDO_DATE_STATUS = 2  # Date status received
 CANDO_BUS_LOAD_STATUS = 3  # Bus load status received
 CANDO_SETUP_STATUS = 4  # CAN setup status received
 CANDO_ANALOG_INPUT_STATUS = 5  # Analogue I/P status received
+
 # CANdo USB PIDs
 CANDO_PID = b"8095"  # CANdo PID
 CANDOISO_PID = b"8660"  # CANdoISO PID
 CANDO_AUTO_PID = b"889B"  # CANdo AUTO PID
-# CANdo function return codes
-CANDO_SUCCESS = 0x0000  # All OK
-CANDO_USB_DLL_ERROR = 0x0001  # WinUSB DLL error
-CANDO_USB_DRIVER_ERROR = 0x0002  # WinUSB driver error
-CANDO_NOT_FOUND = 0x0004  # CANdo not found
-CANDO_IO_FAILED = 0x0008  # Failed to initialise USB I/O
-CANDO_CONNECTION_CLOSED = 0x0010  # No CANdo channel open
-CANDO_READ_ERROR = 0x0020  # USB read error
-CANDO_WRITE_ERROR = 0x0040  # USB write error
-CANDO_WRITE_INCOMPLETE = 0x0080  # Not all requested bytes written to CANdo
-CANDO_BUFFER_OVERFLOW = 0x0100  # Overflow in cyclic buffer
-CANDO_RX_OVERRUN = 0x0200  # Message received greater than max. message size
-CANDO_RX_TYPE_UNKNOWN = 0x0400  # Unknown message type received
-CANDO_RX_CRC_ERROR = 0x0800  # CRC mismatch
-CANDO_RX_DECODE_ERROR = 0x1000  # Error decoding message
-CANDO_INVALID_HANDLE = 0x2000  # Invalid device handle
-CANDO_ERROR = 0x8000  # Non specific error
-# CANdo CAN transmit repeat times
-CANDO_REPEAT_TIME_OFF = 0  # Off
-CANDO_REPEAT_TIME_10MS = 1  # 10ms
-CANDO_REPEAT_TIME_20MS = 2  # 20ms
-CANDO_REPEAT_TIME_50MS = 3  # 50ms
-CANDO_REPEAT_TIME_100MS = 4  # 100ms
-CANDO_REPEAT_TIME_200MS = 5  # 200ms
-CANDO_REPEAT_TIME_500MS = 6  # 500ms
-CANDO_REPEAT_TIME_1S = 7  # 1s
-CANDO_REPEAT_TIME_2S = 8  # 2s
-CANDO_REPEAT_TIME_5S = 9  # 5s
-CANDO_REPEAT_TIME_10S = 10  # 10s
+
+
+class CANdoFuncRetCode(IntEnum):
+    # CANdo function return codes
+    CANDO_SUCCESS = 0x0000  # All OK
+    CANDO_USB_DLL_ERROR = 0x0001  # WinUSB DLL error
+    CANDO_USB_DRIVER_ERROR = 0x0002  # WinUSB driver error
+    CANDO_NOT_FOUND = 0x0004  # CANdo not found
+    CANDO_IO_FAILED = 0x0008  # Failed to initialise USB I/O
+    CANDO_CONNECTION_CLOSED = 0x0010  # No CANdo channel open
+    CANDO_READ_ERROR = 0x0020  # USB read error
+    CANDO_WRITE_ERROR = 0x0040  # USB write error
+    CANDO_WRITE_INCOMPLETE = 0x0080  # Not all requested bytes written to CANdo
+    CANDO_BUFFER_OVERFLOW = 0x0100  # Overflow in cyclic buffer
+    CANDO_RX_OVERRUN = 0x0200  # Message received greater than max. message size
+    CANDO_RX_TYPE_UNKNOWN = 0x0400  # Unknown message type received
+    CANDO_RX_CRC_ERROR = 0x0800  # CRC mismatch
+    CANDO_RX_DECODE_ERROR = 0x1000  # Error decoding message
+    CANDO_INVALID_HANDLE = 0x2000  # Invalid device handle
+    CANDO_ERROR = 0x8000  # Non specific error
+
+
+class CANdoRepeatTime(IntEnum):
+    # CANdo CAN transmit repeat times
+    CANDO_REPEAT_TIME_OFF = 0  # Off
+    CANDO_REPEAT_TIME_10MS = 1  # 10ms
+    CANDO_REPEAT_TIME_20MS = 2  # 20ms
+    CANDO_REPEAT_TIME_50MS = 3  # 50ms
+    CANDO_REPEAT_TIME_100MS = 4  # 100ms
+    CANDO_REPEAT_TIME_200MS = 5  # 200ms
+    CANDO_REPEAT_TIME_500MS = 6  # 500ms
+    CANDO_REPEAT_TIME_1S = 7  # 1s
+    CANDO_REPEAT_TIME_2S = 8  # 2s
+    CANDO_REPEAT_TIME_5S = 9  # 5s
+    CANDO_REPEAT_TIME_10S = 10  # 10s
+
+
+(
+    CANDO_REPEAT_TIME_OFF,
+    CANDO_REPEAT_TIME_10MS,
+    CANDO_REPEAT_TIME_20MS,
+    CANDO_REPEAT_TIME_50MS,
+    CANDO_REPEAT_TIME_100MS,
+    CANDO_REPEAT_TIME_200MS,
+    CANDO_REPEAT_TIME_500MS,
+    CANDO_REPEAT_TIME_1S,
+    CANDO_REPEAT_TIME_2S,
+    CANDO_REPEAT_TIME_5S,
+    CANDO_REPEAT_TIME_10S,
+) = CANdoRepeatTime
+
 # ------------------------------------------------------------------------------
 # TYPEDEFS
 # ------------------------------------------------------------------------------
@@ -344,7 +386,12 @@ else:
 
 @dataclass
 class CANDoISOBusTiming:
-    # The same order as they appear in CANdoISO's application
+    """CANdo ISO bus timing settings.
+
+    NOTE: All these CAN register values are 0 based, so that 0 actually equals 1 (in the CANdo v5.4 application, for example).
+    So, for example, a PHSEG1 value of 3 equates to a 4 PHSEG1 segments in the CAN bit timing (CANdo v5.4 application).
+    """
+
     brp: int
     propseg: int
     phseg1: int
@@ -358,7 +405,22 @@ class CANDoISOBusTiming:
         return self.f_clock / (2 * (self.brp + 1) * (4 + self.propseg + self.phseg1 + self.phseg2))
 
 
-# Values start at 0 for these timings, see docs
+CANDO_REPEAT_TIME_MAP = {
+    0: CANdoRepeatTime.CANDO_REPEAT_TIME_OFF,
+    10: CANdoRepeatTime.CANDO_REPEAT_TIME_10MS,
+    20: CANdoRepeatTime.CANDO_REPEAT_TIME_20MS,
+    50: CANdoRepeatTime.CANDO_REPEAT_TIME_50MS,
+    100: CANdoRepeatTime.CANDO_REPEAT_TIME_100MS,
+    200: CANdoRepeatTime.CANDO_REPEAT_TIME_200MS,
+    500: CANdoRepeatTime.CANDO_REPEAT_TIME_500MS,
+    1000: CANdoRepeatTime.CANDO_REPEAT_TIME_1S,
+    2000: CANdoRepeatTime.CANDO_REPEAT_TIME_2S,
+    5000: CANdoRepeatTime.CANDO_REPEAT_TIME_5S,
+    10000: CANdoRepeatTime.CANDO_REPEAT_TIME_10S,
+}
+
+
+# Register's values start at 0 for these timings, see docs on
 CANDOISO_COMMON_TIMINGS: Dict[int, Dict[Optional[int], CANDoISOBusTiming]] = {
     # TODO: Add these as well
     # 12500: CANDoISOBusTiming(...),
@@ -368,6 +430,7 @@ CANDOISO_COMMON_TIMINGS: Dict[int, Dict[Optional[int], CANDoISOBusTiming]] = {
     125000: {70: CANDoISOBusTiming(3, 4, 7, 5, 0, 0)},
     250000: {70: CANDoISOBusTiming(1, 4, 7, 5, 0, 0)},
     500000: {
+        # Most used baud, different sample points options
         70: CANDoISOBusTiming(0, 4, 7, 5, 0, 0),
         80: CANDoISOBusTiming(1, 2, 3, 1, 0, 0),
         85: CANDoISOBusTiming(0, 7, 7, 2, 0, 0),
@@ -397,7 +460,7 @@ def candoiso_get_timing(bitrate: int, sample_point: Optional[int] = None) -> CAN
 # ------------------------------------------------------------------------------
 
 
-class CANdoErrCodes(Enum):
+class CANdoErrCodes(IntEnum):
     # CANdo Status Error (may be logical ORed together)
     CANDO_OK = 0x00  # "All OK"
     CANDO_USB_RX_OVERRUN = 0x01  # "USB port receive message overrun"
@@ -410,7 +473,7 @@ class CANdoErrCodes(Enum):
     CANDO_CAN_BUS_ERROR = 0x80  # "CAN bus error"
 
 
-class CANdoBusSts(Enum):
+class CANdoBusSts(IntEnum):
     # CANdo BusState (may be logical ORed together)
     CAN_OK = 0x00  # "All OK"
     CAN_WARN = 0x01  # "Rx/Tx warning (>95 errors)"
