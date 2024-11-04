@@ -59,7 +59,7 @@ from can_netronics.CANdoImport import (
     cando_get_timing,
 )
 
-log = logging.getLogger("can.CANDo")
+log = logging.getLogger("can.CANdo")
 log.addHandler(logging.StreamHandler())
 log.setLevel(logging.DEBUG)
 
@@ -71,7 +71,7 @@ else:
         return f
 
 
-class CANDoBus(BusABC):
+class CANdoBus(BusABC):
     # No. of devices to look for
     NoOfDevices: c_int
 
@@ -136,7 +136,7 @@ class CANDoBus(BusABC):
 
         if channel >= self.NoOfDevices.value:
             raise CANdoInitializationError(
-                f"Invalid channel number: {channel}, only {self.NoOfDevices.value} devices detected and values start at 0"
+                f"Invalid channel number: {channel}, only {self.NoOfDevices.value} devices detected and values start at 0",
             )
 
         self.is_candoiso = is_candoiso
@@ -693,7 +693,7 @@ class CANDoBus(BusABC):
     def _detect_available_configs() -> List[AutoDetectedConfig]:
         interfaces: List[AutoDetectedConfig] = []
 
-        bus = CANDoBus(None)  # Channel discovery mode
+        bus = CANdoBus(None)  # Channel discovery mode
         if bus.NoOfDevices.value > 0:
             interfaces = [AutoDetectedConfig(interface="cando", channel=c) for c in range(bus.NoOfDevices.value)]
 
@@ -737,7 +737,7 @@ class CANDoBus(BusABC):
                 else:
                     raise CANdoOperationError(f"Failed to close connection, error code: {CANdoFuncRetCodeErr(res)}")
             else:
-                log.error("Connection to device is already closed!")
+                log.debug("Connection to device is already closed!")
 
     @override
     def _recv_internal(self, timeout: Optional[float]) -> Tuple[Optional[Message], bool]:
@@ -835,7 +835,7 @@ class CANDoBus(BusABC):
 
 
 def main() -> None:
-    interfaces = CANDoBus._detect_available_configs()  # type: ignore
+    interfaces = CANdoBus._detect_available_configs()  # type: ignore
 
     if len(interfaces) == 0:
         print("No CANdo(ISO) devices detected!")
@@ -846,7 +846,7 @@ def main() -> None:
         print(f"  {i}")
     selected = int(input("Select channel: "))
 
-    bus = CANDoBus(selected)
+    bus = CANdoBus(selected)
 
     try:
         while True:

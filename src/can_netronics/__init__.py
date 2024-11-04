@@ -1,7 +1,7 @@
-"""Module provides the CANDoBus class for interfacing with the CANDo(ISO) module."""
+"""Module provides the CANdoBus class for interfacing with the CANdo(ISO) module."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
-__all__ = ["__version__", "CANDoBus"]
+__all__ = ["__version__", "CANdoBus"]
 
-from can_netronics.CANdo import CANDoBus
+from can_netronics.CANdo import CANdoBus

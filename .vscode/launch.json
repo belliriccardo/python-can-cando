@@ -19,6 +19,14 @@
             "module": "build",
             "console": "integratedTerminal",
             "justMyCode": false,
-        }
+        },
+        {
+            "name": "Python Debugger: current file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+        },
     ]
 }

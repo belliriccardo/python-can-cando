@@ -385,7 +385,7 @@ class CANdoInitializationError(CanInitializationError):
 
 
 @dataclass
-class CANDoBusTiming:
+class CANdoBusTiming:
     """CANdo ISO bus timing settings.
 
     NOTE: All these CAN register values are 0 based, so that 0 actually equals 1 (in the CANdo v5.4 application, for example).
@@ -422,25 +422,25 @@ CANDO_REPEAT_TIME_MAP = {
 
 
 # Register's values start at 0 for these timings, see docs on
-CANDO_COMMON_TIMINGS: Dict[int, Dict[Optional[int], CANDoBusTiming]] = {
+CANDO_COMMON_TIMINGS: Dict[int, Dict[Optional[int], CANdoBusTiming]] = {
     # TODO: Add these as well
-    # 12500: CANDoBusTiming(...),
-    # 20000: CANDoBusTiming(...),
-    # 50000: CANDoBusTiming(...),
-    # 100000: CANDoBusTiming(...),
-    125000: {70: CANDoBusTiming(3, 4, 7, 5, 0, 0)},
-    250000: {70: CANDoBusTiming(1, 4, 7, 5, 0, 0)},
+    # 12500: CANdoBusTiming(...),
+    # 20000: CANdoBusTiming(...),
+    # 50000: CANdoBusTiming(...),
+    # 100000: CANdoBusTiming(...),
+    125000: {70: CANdoBusTiming(3, 4, 7, 5, 0, 0)},
+    250000: {70: CANdoBusTiming(1, 4, 7, 5, 0, 0)},
     500000: {
         # Most used baud, different sample points options
-        70: CANDoBusTiming(0, 4, 7, 5, 0, 0),
-        80: CANDoBusTiming(1, 2, 3, 1, 0, 0),
-        85: CANDoBusTiming(0, 7, 7, 2, 0, 0),
+        70: CANdoBusTiming(0, 4, 7, 5, 0, 0),
+        80: CANdoBusTiming(1, 2, 3, 1, 0, 0),
+        85: CANdoBusTiming(0, 7, 7, 2, 0, 0),
     },
-    1000000: {80: CANDoBusTiming(0, 2, 3, 1, 0, 0)},
+    1000000: {80: CANdoBusTiming(0, 2, 3, 1, 0, 0)},
 }
 
 
-def cando_get_timing(bitrate: int, sample_point: Optional[int] = None) -> CANDoBusTiming:
+def cando_get_timing(bitrate: int, sample_point: Optional[int] = None) -> CANdoBusTiming:
     if bitrate not in CANDO_COMMON_TIMINGS:
         raise ValueError(f"Bitrate {bitrate} not supported")
 

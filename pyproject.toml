@@ -8,7 +8,7 @@ description = "python-can interface for Netronics CANdo and CANdoISO device"
 readme = "README.md"
 requires-python = ">=3.7"
 license = { text = "LGPL v3" }
-keywords = ["python-can", "CAN", "netronics", "cando", "candoiso"]
+keywords = ["python-can", "CAN", "CANbus", "netronics", "cando", "candoiso"]
 authors = [{ name = "Riccardo Belli", email = "riccardo.belli@solaredge.com" }]
 classifiers = [
     "Programming Language :: Python",
@@ -26,7 +26,7 @@ dependencies = ["python-can==4.*"]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-dev = ["ruff==0.6.7"]
+dev = ["ruff==0.7.2"]
 
 [project.entry-points."can.interface"]
 cando = "can_netronics.CANdo:CANdoBus"
@@ -41,7 +41,7 @@ Homepage = "https://github.com/belliriccardo/python-can-netronics"
 zip-safe = false
 
 [tool.setuptools.packages.find]
-where = ["can_netronics"]
+where = ["src"]
 
 # [tool.setuptools.package-data]
 # can_netronics = ["py.typed", "*.pyi"]
