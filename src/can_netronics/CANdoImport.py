@@ -31,6 +31,8 @@ from enum import IntEnum
 from queue import Queue
 from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
+from can.exceptions import CanInitializationError, CanOperationError
+
 # ------------------------------------------------------------------------------
 # CONSTANTS
 # ------------------------------------------------------------------------------
@@ -63,6 +65,10 @@ CANDO_CLK_FREQ_HIGH = 40000
 
 # CANdoISO clock frequency in Hz
 CANDOISO_F_CLOCK = CANDO_CLK_FREQ_HIGH * 1000
+
+# CANdo clock frequency in Hz
+CANDO_F_CLOCK = CANDO_CLK_FREQ * 1000
+
 CAN_MSG_TIMESTAMP_RESOLUTION = 25.6e-6  # Timestamp resolution is 25.6us per bit
 
 # TODO: check
@@ -143,20 +149,6 @@ class CANdoRepeatTime(IntEnum):
     CANDO_REPEAT_TIME_5S = 9  # 5s
     CANDO_REPEAT_TIME_10S = 10  # 10s
 
-
-(
-    CANDO_REPEAT_TIME_OFF,
-    CANDO_REPEAT_TIME_10MS,
-    CANDO_REPEAT_TIME_20MS,
-    CANDO_REPEAT_TIME_50MS,
-    CANDO_REPEAT_TIME_100MS,
-    CANDO_REPEAT_TIME_200MS,
-    CANDO_REPEAT_TIME_500MS,
-    CANDO_REPEAT_TIME_1S,
-    CANDO_REPEAT_TIME_2S,
-    CANDO_REPEAT_TIME_5S,
-    CANDO_REPEAT_TIME_10S,
-) = CANdoRepeatTime
 
 # ------------------------------------------------------------------------------
 # TYPEDEFS
@@ -379,13 +371,21 @@ else:
     MsgDataType = ctypes.Array
 
 
+class CANdoOperationError(CanOperationError):
+    """Indicates an error in the CANdo ISO API."""
+
+
+class CANdoInitializationError(CanInitializationError):
+    """Indicates an error during the initialization of the CANdo ISO API."""
+
+
 # ------------------------------------------------------------------------------
 # BIT TIMINGS UTILITIES
 # ------------------------------------------------------------------------------
 
 
 @dataclass
-class CANDoISOBusTiming:
+class CANDoBusTiming:
     """CANdo ISO bus timing settings.
 
     NOTE: All these CAN register values are 0 based, so that 0 actually equals 1 (in the CANdo v5.4 application, for example).
@@ -398,11 +398,12 @@ class CANDoISOBusTiming:
     phseg2: int
     sjw: int
     sam: int
-    f_clock = CANDOISO_F_CLOCK
 
-    @property
-    def baud(self) -> float:
-        return self.f_clock / (2 * (self.brp + 1) * (4 + self.propseg + self.phseg1 + self.phseg2))
+    def f_clock(self, is_candoiso: bool = True) -> int:
+        return CANDOISO_F_CLOCK if is_candoiso else CANDO_F_CLOCK
+
+    def baud(self, is_candoiso: bool = True) -> float:
+        return self.f_clock(is_candoiso) / (2 * (self.brp + 1) * (4 + self.propseg + self.phseg1 + self.phseg2))
 
 
 CANDO_REPEAT_TIME_MAP = {
@@ -421,29 +422,29 @@ CANDO_REPEAT_TIME_MAP = {
 
 
 # Register's values start at 0 for these timings, see docs on
-CANDOISO_COMMON_TIMINGS: Dict[int, Dict[Optional[int], CANDoISOBusTiming]] = {
+CANDO_COMMON_TIMINGS: Dict[int, Dict[Optional[int], CANDoBusTiming]] = {
     # TODO: Add these as well
-    # 12500: CANDoISOBusTiming(...),
-    # 20000: CANDoISOBusTiming(...),
-    # 50000: CANDoISOBusTiming(...),
-    # 100000: CANDoISOBusTiming(...),
-    125000: {70: CANDoISOBusTiming(3, 4, 7, 5, 0, 0)},
-    250000: {70: CANDoISOBusTiming(1, 4, 7, 5, 0, 0)},
+    # 12500: CANDoBusTiming(...),
+    # 20000: CANDoBusTiming(...),
+    # 50000: CANDoBusTiming(...),
+    # 100000: CANDoBusTiming(...),
+    125000: {70: CANDoBusTiming(3, 4, 7, 5, 0, 0)},
+    250000: {70: CANDoBusTiming(1, 4, 7, 5, 0, 0)},
     500000: {
         # Most used baud, different sample points options
-        70: CANDoISOBusTiming(0, 4, 7, 5, 0, 0),
-        80: CANDoISOBusTiming(1, 2, 3, 1, 0, 0),
-        85: CANDoISOBusTiming(0, 7, 7, 2, 0, 0),
+        70: CANDoBusTiming(0, 4, 7, 5, 0, 0),
+        80: CANDoBusTiming(1, 2, 3, 1, 0, 0),
+        85: CANDoBusTiming(0, 7, 7, 2, 0, 0),
     },
-    1000000: {80: CANDoISOBusTiming(0, 2, 3, 1, 0, 0)},
+    1000000: {80: CANDoBusTiming(0, 2, 3, 1, 0, 0)},
 }
 
 
-def candoiso_get_timing(bitrate: int, sample_point: Optional[int] = None) -> CANDoISOBusTiming:
-    if bitrate not in CANDOISO_COMMON_TIMINGS:
+def cando_get_timing(bitrate: int, sample_point: Optional[int] = None) -> CANDoBusTiming:
+    if bitrate not in CANDO_COMMON_TIMINGS:
         raise ValueError(f"Bitrate {bitrate} not supported")
 
-    avail_bitrates = CANDOISO_COMMON_TIMINGS[bitrate]
+    avail_bitrates = CANDO_COMMON_TIMINGS[bitrate]
 
     if sample_point is None:
         # if len(avail_bitrates) == 1:
@@ -532,6 +533,46 @@ def CANdoBusStsErr(value: int) -> str:
         sts_err += "Receive buffer 1 overflow, "
     if value & CANdoBusSts.CAN_RX2_OVERFLOW.value:
         sts_err += "Receive buffer 2 overflow, "
+
+    if sts_err == "":
+        sts_err = "All OK"
+    return sts_err.rstrip(", ")
+
+
+def CANdoFuncRetCodeErr(value: int) -> str:
+    # CANdo function return codes (may be logical ORed together)
+    sts_err = ""
+
+    if value & CANdoFuncRetCode.CANDO_USB_DLL_ERROR.value:
+        sts_err += "WinUSB DLL error, "
+    if value & CANdoFuncRetCode.CANDO_USB_DRIVER_ERROR.value:
+        sts_err += "WinUSB driver error, "
+    if value & CANdoFuncRetCode.CANDO_NOT_FOUND.value:
+        sts_err += "CANdo not found, "
+    if value & CANdoFuncRetCode.CANDO_IO_FAILED.value:
+        sts_err += "Failed to initialise USB I/O, "
+    if value & CANdoFuncRetCode.CANDO_CONNECTION_CLOSED.value:
+        sts_err += "No CANdo channel open, "
+    if value & CANdoFuncRetCode.CANDO_READ_ERROR.value:
+        sts_err += "USB read error, "
+    if value & CANdoFuncRetCode.CANDO_WRITE_ERROR.value:
+        sts_err += "USB write error, "
+    if value & CANdoFuncRetCode.CANDO_WRITE_INCOMPLETE.value:
+        sts_err += "Not all requested bytes written to CANdo, "
+    if value & CANdoFuncRetCode.CANDO_BUFFER_OVERFLOW.value:
+        sts_err += "Overflow in cyclic buffer, "
+    if value & CANdoFuncRetCode.CANDO_RX_OVERRUN.value:
+        sts_err += "Message received greater than max. message size, "
+    if value & CANdoFuncRetCode.CANDO_RX_TYPE_UNKNOWN.value:
+        sts_err += "Unknown message type received, "
+    if value & CANdoFuncRetCode.CANDO_RX_CRC_ERROR.value:
+        sts_err += "CRC mismatch, "
+    if value & CANdoFuncRetCode.CANDO_RX_DECODE_ERROR.value:
+        sts_err += "Error decoding message, "
+    if value & CANdoFuncRetCode.CANDO_INVALID_HANDLE.value:
+        sts_err += "Invalid device handle, "
+    if value & CANdoFuncRetCode.CANDO_ERROR.value:
+        sts_err += "Non specific error, "
 
     if sts_err == "":
         sts_err = "All OK"

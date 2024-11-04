@@ -8,7 +8,15 @@
             "name": "Python Debugger: CANdoISO",
             "type": "debugpy",
             "request": "launch",
-            "program": "can_netronics/CANdoISO.py",
+            "program": "src/can_netronics/CANdoISO.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+        },
+        {
+            "name": "Python: Build",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "build",
             "console": "integratedTerminal",
             "justMyCode": false,
         }
