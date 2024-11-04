@@ -3,8 +3,8 @@ build-backend = 'setuptools.build_meta'
 requires = ["setuptools >= 62.0"]
 
 [project]
-name = "python-can-netronics"
-description = "python-can interface for Netronics CANdo and CANdoISO device"
+name = "python-can-cando"
+description = "python-can interface for Netronics CANdo and CANdoISO devices"
 readme = "README.md"
 requires-python = ">=3.7"
 license = { text = "LGPL v3" }
@@ -29,13 +29,13 @@ dynamic = ["version"]
 dev = ["ruff==0.7.2"]
 
 [project.entry-points."can.interface"]
-cando = "can_netronics.CANdo:CANdoBus"
+cando = "can_cando.CANdo:CANdoBus"
 
 [project.urls]
-Documentation = "https://github.com/belliriccardo/python-can-netronics#readme"
-Issues = "https://github.com/belliriccardo/python-can-netronics/issues"
-Source = "https://github.com/belliriccardo/python-can-netronics"
-Homepage = "https://github.com/belliriccardo/python-can-netronics"
+Documentation = "https://github.com/belliriccardo/python-can-cando#readme"
+Issues = "https://github.com/belliriccardo/python-can-cando/issues"
+Source = "https://github.com/belliriccardo/python-can-cando"
+Homepage = "https://github.com/belliriccardo/python-can-cando"
 
 [tool.setuptools]
 zip-safe = false
@@ -44,10 +44,10 @@ zip-safe = false
 where = ["src"]
 
 # [tool.setuptools.package-data]
-# can_netronics = ["py.typed", "*.pyi"]
+# can_cando = ["py.typed", "*.pyi"]
 
 [tool.setuptools.dynamic]
-version = { attr = "can_netronics.__version__" }
+version = { attr = "can_cando.__version__" }
 
 # [tool.pytest.ini_options]
 # minversion = "6.0"

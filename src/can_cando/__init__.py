@@ -4,4 +4,4 @@ __version__ = "0.2.0"
 
 __all__ = ["__version__", "CANdoBus"]
 
-from can_netronics.CANdo import CANdoBus
+from can_cando.CANdo import CANdoBus

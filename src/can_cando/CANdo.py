@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from can import BusABC, CanProtocol, Message
 from can.typechecking import AutoDetectedConfig, CanFilters
 
-from can_netronics.CANdoImport import (
+from can_cando.CANdoImport import (
     CAN_MSG_TIMESTAMP_RESOLUTION,
     CANDO_CAN_BUFFER_LENGTH,
     CANDO_DEVICE_STATUS,
@@ -122,7 +122,7 @@ class CANdoBus(BusABC):
             f"Driver = v{DriverVersion.value / 10}\n"
         )
 
-        self._available_configs = self._detect_cando_iso()
+        self._detect_cando_iso()
 
         if channel is None:
             # Channel discovery mode
@@ -611,15 +611,17 @@ class CANdoBus(BusABC):
         if not self.CANdoUSB.OpenFlag:
             raise CANdoOperationError("Device not open!")
 
-        return CANdoTransmit(
-            self.CANdoUSBPtr,  # Device handle pointer
-            IDExtended,
-            ID,
-            RTR,
-            DLC,
-            Data,
-            int(BufferNo),
-            int(RepeatTime),
+        return int(
+            CANdoTransmit(
+                self.CANdoUSBPtr,  # Device handle pointer
+                IDExtended,
+                ID,
+                RTR,
+                DLC,
+                Data,
+                int(BufferNo),
+                int(RepeatTime),
+            ),
         )
 
     def _recv_t(self) -> None:
@@ -765,7 +767,6 @@ class CANdoBus(BusABC):
     @override
     def set_filters(self, filters: Optional[CanFilters] = None) -> None:
         # TODO: Implement
-        log.warning("Filters are not implemented yet, all messages will be received")
 
         if filters is None:
             return
@@ -774,7 +775,7 @@ class CANdoBus(BusABC):
         for flt in filters:
             can_id = flt["can_id"]
             can_mask = flt["can_mask"]
-            extended = int(flt.get("extended", False))
+            extended = int(flt.get("extended", False))  # type: ignore
 
             if can_id not in filters_mask_dict:
                 filters_mask_dict[can_id] = [(can_mask, extended)]
