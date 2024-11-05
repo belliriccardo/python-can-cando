@@ -2,18 +2,17 @@ import logging
 import sys
 import threading
 from ctypes import byref, c_int, c_ubyte, pointer
-
-# Fix relative import
 from pathlib import Path
 from queue import Empty, Queue
 from time import sleep, time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from can import BusABC, CanProtocol, Message
+from can.broadcastmanager import CyclicSendTaskABC
 from can.typechecking import AutoDetectedConfig, CanFilters
 
+# TODO: REMOVE
 sys.path.append(Path(__file__).resolve().parents[1].as_posix())
-
 from can_cando.CANdoImport import (
     CAN_MSG_TIMESTAMP_RESOLUTION,
     CANDO_CAN_BUFFER_LENGTH,
@@ -67,7 +66,7 @@ from can_cando.CANdoImport import (
 
 log = logging.getLogger("can.CANdo")
 log.addHandler(logging.StreamHandler())
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 if sys.version_info >= (3, 12):
     from typing import override  # novermin
@@ -160,6 +159,10 @@ class CANdoBus(BusABC):
 
         if not self.CANdoUSB.OpenFlag:
             raise CANdoInitializationError("Device not open!")
+
+        # Ensure that when we request the device's status,
+        # the receiving thread does not interfere.
+        self._recv_lock = threading.Lock()
 
         self.set_timings()
         # Normal mode: Rx/Tx CAN mode
@@ -331,7 +334,7 @@ class CANdoBus(BusABC):
         ):
             raise CANdoInitializationError("Failed to set baud rate!")
 
-        # The docs state that if the new settings differ from the current settings, the device can take up
+        # The programmer's guide state that if the new settings differ from the current settings, the device can take up
         # to 100ms to store the new settings, during which time the device will not accept to any new commands.
         sleep(0.1)
 
@@ -414,7 +417,7 @@ class CANdoBus(BusABC):
         if ret != CANdoFuncRetCode.CANDO_SUCCESS:
             raise CANdoInitializationError(f"Failed to set CANdo(ISO) filters: {CANdoFuncRetCodeErr(ret)}")
 
-        # Sleep for 10ms as stated in the docs
+        # Sleep for 10ms as stated in the programmer's guide
         sleep(0.01)
 
     def cando_request_status(self) -> None:
@@ -465,37 +468,38 @@ class CANdoBus(BusABC):
         CANdo device.)
         """
         sts = "Status unknown"
-        if CANdoRequestStatus(self.CANdoUSBPtr) == CANdoFuncRetCode.CANDO_SUCCESS:
-            # Wait for device to reply #TODO: in the docs it's mentioned that it takes < 1ms to get a response actually
-            sleep(0.01)  # Sleep for 10ms, even though it should be < 1ms TODO: check if this is necessary
-            self.CANdoStatus.NewFlag = CANDO_NO_STATUS  # Clear status flag
+        with self._recv_lock:  # Ensure that the receiving thread does not interfere
+            if CANdoRequestStatus(self.CANdoUSBPtr) == CANdoFuncRetCode.CANDO_SUCCESS:
+                # Wait for device to reply; in the programmer's guide it's mentioned that it takes < 1ms to get a response.
+                sleep(0.001)
+                self.CANdoStatus.NewFlag = CANDO_NO_STATUS  # Clear status flag
 
-            # Receive status message
-            if (
-                CANdoReceive(
-                    self.CANdoUSBPtr,
-                    self.CANdoCANBufferPtr,
-                    self.CANdoStatusPtr,
-                )
-                == CANdoFuncRetCode.CANDO_SUCCESS
-            ) and self.CANdoStatus.NewFlag == CANDO_DEVICE_STATUS:  # type: ignore
-                # Display new device status
-                sts = "  {} S/N {} H/W v{}, S/W v{}, Status = {}, Bus State = {}\n".format(
-                    self.CANdoUSB.Description.decode("utf-8"),
-                    self.CANdoUSB.SerialNo.decode("utf-8"),
-                    self.CANdoStatus.HardwareVersion / 10,
-                    self.CANdoStatus.SoftwareVersion / 10,
-                    self.CANdoStatus.Status,
-                    self.CANdoStatus.BusState,
-                )
+                # Receive status message
+                if (
+                    CANdoReceive(
+                        self.CANdoUSBPtr,
+                        self.CANdoCANBufferPtr,
+                        self.CANdoStatusPtr,
+                    )
+                    == CANdoFuncRetCode.CANDO_SUCCESS
+                ) and self.CANdoStatus.NewFlag == CANDO_DEVICE_STATUS:  # type: ignore
+                    # Display new device status
+                    sts = "  {} S/N {} H/W v{}, S/W v{}, Status = {}, Bus State = {}\n".format(
+                        self.CANdoUSB.Description.decode("utf-8"),
+                        self.CANdoUSB.SerialNo.decode("utf-8"),
+                        self.CANdoStatus.HardwareVersion / 10,
+                        self.CANdoStatus.SoftwareVersion / 10,
+                        self.CANdoStatus.Status,
+                        self.CANdoStatus.BusState,
+                    )
 
-                sts += f"Status Err: {CANdoStsErr(self.CANdoStatus.Status)}\n"
-                sts += f"Bus State Err: {CANdoBusStsErr(self.CANdoStatus.BusState)}\n"
+                    sts += f"Status Err: {CANdoStsErr(self.CANdoStatus.Status)}\n"
+                    sts += f"Bus State Err: {CANdoBusStsErr(self.CANdoStatus.BusState)}\n"
 
         return sts
 
     def print_status(self) -> None:
-        log.debug(self.get_status_description())
+        log.info(self.get_status_description())
 
     def cando_clear_status(self) -> None:
         """Clear the internal system status within the CANdo device.
@@ -636,7 +640,7 @@ class CANdoBus(BusABC):
             raise CANdoOperationError("Device not open!")
 
         for buf_no in range(1, 16):
-            self.cando_transmit(
+            ret = self.cando_transmit(
                 0,
                 0,
                 0,
@@ -645,6 +649,8 @@ class CANdoBus(BusABC):
                 buf_no,
                 CANdoRepeatTime.CANDO_REPEAT_TIME_OFF,
             )
+            if ret != CANdoFuncRetCode.CANDO_SUCCESS:
+                log.error(f"Failed to stop transmission on buffer {buf_no}, error code: {CANdoFuncRetCodeErr(ret)}")
 
     def _recv_t(self) -> None:
         # Local copy to avoid global lookups
@@ -654,21 +660,20 @@ class CANdoBus(BusABC):
             # Clear status flag
             self.CANdoStatus.NewFlag = CANDO_NO_STATUS
 
-            # Receive CAN messages
-            if CANdoReceive(self.CANdoUSBPtr, self.CANdoCANBufferPtr, self.CANdoStatusPtr) != CANdoFuncRetCode.CANDO_SUCCESS:
-                raise CANdoOperationError("Error receiving messages")
+            with self._recv_lock:  # Do not interfere with status requests
+                if CANdoReceive(self.CANdoUSBPtr, self.CANdoCANBufferPtr, self.CANdoStatusPtr) != CANdoFuncRetCode.CANDO_SUCCESS:
+                    raise CANdoOperationError("Error receiving messages")
 
-            # print(
-            #     f"Status: {CANdoStsErr(self.CANdoStatus.Status)}, "
-            #     f"Bus State: {CANdoBusStsErr(self.CANdoStatus.BusState)}",
-            # )
+                # print(
+                #     f"Status: {CANdoStsErr(self.CANdoStatus.Status)}, "
+                #     f"Bus State: {CANdoBusStsErr(self.CANdoStatus.BusState)}",
+                # )
 
             if self.CANdoCANBuffer.ReadIndex == self.CANdoCANBuffer.WriteIndex and not self.CANdoCANBuffer.FullFlag:
                 # No messages were received, sleep for a short time
                 sleep(0.01)
                 continue
 
-            # CANdoReceive success
             while self.CANdoCANBuffer.ReadIndex != self.CANdoCANBuffer.WriteIndex or self.CANdoCANBuffer.FullFlag:
                 arbitration_id = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].ID
                 ide = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].IDE
@@ -680,15 +685,10 @@ class CANdoBus(BusABC):
                 # bus_state = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].BusState
 
                 # Timestamp - a timestamp indicating the receive time of the message since starting CANdo.
-                # The timestamp resolution is 25.6us per bit.
                 timestamp = (self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].TimeStamp * ts_resolution) + self.t_start
 
-                if (self.CANdoCANBuffer.ReadIndex + 1) < CANDO_CAN_BUFFER_LENGTH:
-                    # Increment index onto next slot
-                    self.CANdoCANBuffer.ReadIndex += 1
-                else:
-                    self.CANdoCANBuffer.ReadIndex = 0
-
+                # Increment index onto next circular buffer element
+                self.CANdoCANBuffer.ReadIndex = (self.CANdoCANBuffer.ReadIndex + 1) % CANDO_CAN_BUFFER_LENGTH
                 self.CANdoCANBuffer.FullFlag = False  # No longer full
 
                 self.msg_queue.put(
@@ -703,7 +703,6 @@ class CANdoBus(BusABC):
                 )
 
                 if self.CANdoStatus.NewFlag == CANDO_DEVICE_STATUS:  # type: ignore
-                    # Display new device status
                     # log.debug(f"  Status = {self.CANdoStatus.Status}, Bus State = {self.CANdoStatus.BusState}")
                     self.CANdoStatus.NewFlag = CANDO_NO_STATUS  # Clear status flag
 
@@ -873,6 +872,22 @@ class CANdoBus(BusABC):
                 log.debug("Connection to device is already closed!")
 
     @override
+    def send_periodic(
+        self,
+        msgs: Union[Message, Sequence[Message]],
+        period: float,
+        duration: Optional[float] = None,
+        store_task: bool = True,
+        modifier_callback: Optional[Callable[[Message], None]] = None,
+    ) -> CyclicSendTaskABC:
+        if not self.CANdoUSB.OpenFlag:
+            raise CANdoOperationError("Device not open!")
+        log.warning(
+            "To send periodic messages using CANdo(ISO)'s internal specialized repeat buffers, check \"cando_transmit\"'s implementation.",
+        )
+        return super().send_periodic(msgs, period, duration, store_task, modifier_callback)
+
+    @override
     def stop_all_periodic_tasks(self, remove_tasks: bool = True) -> None:
         self.cando_stop_all_periodic_transmissions()
         super().stop_all_periodic_tasks(remove_tasks=remove_tasks)
@@ -888,17 +903,17 @@ def main() -> None:
     print("Available CANdo(ISO) channels:")
     for i in interfaces:
         print(f"  {i}")
-    selected = int(input("Select channel: "))
+    selected = int(input("Select channel: ") or "0")
 
     bus = CANdoBus(selected)
 
-    can_filters = [
-        {"can_mask": 0x7FF, "can_id": 0x0, "extended": False},
-        {"can_mask": 0x1FFF0000, "can_id": 0x1500, "extended": True},
-        {"can_mask": 0x1FFF0000, "can_id": 0x18DA0000, "extended": True},
-    ]
+    # can_filters = [
+    #     {"can_mask": 0x7FF, "can_id": 0x0, "extended": False},
+    #     {"can_mask": 0x1FFF0000, "can_id": 0x1500, "extended": True},
+    #     {"can_mask": 0x1FFF0000, "can_id": 0x18DA0000, "extended": True},
+    # ]
 
-    bus.set_filters(can_filters)  # type: ignore
+    # bus.set_filters(can_filters)  # type: ignore
 
     try:
         while True:

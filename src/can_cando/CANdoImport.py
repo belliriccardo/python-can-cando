@@ -12,9 +12,8 @@
 #
 #  UPDATES :-
 #  22/01/21 Created (Martyn Brown)
-#  01/10/24 Modified for python-can compatibility, type
+#  05/11/24 Modified for python-can compatibility, type
 #           hinting and error codes (Riccardo Belli)
-#  TODO: credits?
 #
 #  LICENSE :-
 #  The SDK (Software Development Kit) provided for use with the CANdo device
@@ -71,7 +70,6 @@ CANDO_F_CLOCK = CANDO_CLK_FREQ * 1000
 
 CAN_MSG_TIMESTAMP_RESOLUTION = 25.6e-6  # Timestamp resolution is 25.6us per bit
 
-# TODO: check
 # BRP enhanced baud rate setting offset (CANdoISO & CANdo AUTO only)
 CANDO_BRP_ENHANCED_OFFSET = 63
 
@@ -423,14 +421,14 @@ CANDO_REPEAT_TIME_MAP = {
     10000: CANdoRepeatTime.CANDO_REPEAT_TIME_10S,
 }
 
-
-# Register's values start at 0 for these timings, see docs on
+# These values have been calculated using the CANdo v5.4 application;
+# the values with a single sample point are the default values used by the application.
+# Register's values start at 0 for these timings, see programmer's guide
 CANDO_COMMON_TIMINGS: Dict[int, Dict[Optional[int], CANdoBusTiming]] = {
-    # TODO: Add these as well
-    # 12500: CANdoBusTiming(...),
-    # 20000: CANdoBusTiming(...),
-    # 50000: CANdoBusTiming(...),
-    # 100000: CANdoBusTiming(...),
+    12500: {68: CANdoBusTiming(31, 7, 7, 7, 0, 0)},
+    20000: {70: CANdoBusTiming(24, 4, 7, 5, 0, 0)},
+    50000: {70: CANdoBusTiming(9, 4, 7, 5, 0, 0)},
+    100000: {70: CANdoBusTiming(4, 4, 7, 5, 0, 0)},
     125000: {70: CANdoBusTiming(3, 4, 7, 5, 0, 0)},
     250000: {70: CANdoBusTiming(1, 4, 7, 5, 0, 0)},
     500000: {
@@ -439,6 +437,7 @@ CANDO_COMMON_TIMINGS: Dict[int, Dict[Optional[int], CANdoBusTiming]] = {
         80: CANdoBusTiming(1, 2, 3, 1, 0, 0),
         85: CANdoBusTiming(0, 7, 7, 2, 0, 0),
     },
+    625000: {75: CANdoBusTiming(0, 4, 5, 3, 0, 0)},
     1000000: {80: CANdoBusTiming(0, 2, 3, 1, 0, 0)},
 }
 

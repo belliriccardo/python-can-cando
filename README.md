@@ -31,9 +31,9 @@ bus = CANdoBus(channel=0)
 
 ## Extra information
 
-There are some inherent limitations to this device; you should really check the programmer's manual and the actual implementation of some methods, such as the `cando_transmit`'s documentation on how to use the device's internal repeat buffers; the number of such available buffers and message timing periodicity is fixed and limited. The implementation of `BusABC.send_periodic` is intentionally NOT overridden for this reason.
+There are some inherent limitations to this device; you should really check the programmer's guide and the actual implementation of some methods, such as the `cando_transmit`'s documentation on how to use the device's internal repeat buffers; the number of such available buffers and message timing periodicity is fixed and limited. The implementation of `BusABC.send_periodic` is intentionally dummy-overridden for this reason.
 
-Anyways, the programmer's manual and all the relative datasheets for the devices can be downloaded from [netronics' download page](https://www.cananalyser.co.uk/download.html).
+Anyways, the programmer's guide and all the relative datasheets for the devices can be downloaded from [netronics' download page](https://www.cananalyser.co.uk/download.html).
 
 ###### A note on bus load
 
