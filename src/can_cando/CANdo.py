@@ -169,7 +169,7 @@ class CANdoBus(BusABC):
         self.set_mode(CANdoMode.CANDO_NORMAL_MODE)
 
         self.filters_active = False
-        # Will be set to True if filters are set
+        # Will be set to True if filters are correctly set
         self.set_filters(can_filters)
 
         self.flush_buffers()
@@ -758,8 +758,8 @@ class CANdoBus(BusABC):
                     data=msg[5],
                     channel=self.channel,
                 ),
-                # If we get a message, it was certainly filtered!
-                True,
+                # Filters weren't set => all messages are received
+                self.filters_active,
             )
         except Empty:
             return (None, False)
