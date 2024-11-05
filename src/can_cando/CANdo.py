@@ -907,14 +907,6 @@ def main() -> None:
 
     bus = CANdoBus(selected)
 
-    # can_filters = [
-    #     {"can_mask": 0x7FF, "can_id": 0x0, "extended": False},
-    #     {"can_mask": 0x1FFF0000, "can_id": 0x1500, "extended": True},
-    #     {"can_mask": 0x1FFF0000, "can_id": 0x18DA0000, "extended": True},
-    # ]
-
-    # bus.set_filters(can_filters)  # type: ignore
-
     try:
         while True:
             _in = input(
