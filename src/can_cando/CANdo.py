@@ -657,54 +657,47 @@ class CANdoBus(BusABC):
         ts_resolution = CAN_MSG_TIMESTAMP_RESOLUTION
 
         while not self._is_shutdown:
-            # Clear status flag
-            self.CANdoStatus.NewFlag = CANDO_NO_STATUS
+            has_received_messages = False
 
             with self._recv_lock:  # Do not interfere with status requests
-                if CANdoReceive(self.CANdoUSBPtr, self.CANdoCANBufferPtr, self.CANdoStatusPtr) != CANdoFuncRetCode.CANDO_SUCCESS:
-                    raise CANdoOperationError("Error receiving messages")
+                # Clear status flag
+                self.CANdoStatus.NewFlag = CANDO_NO_STATUS
 
-                # print(
-                #     f"Status: {CANdoStsErr(self.CANdoStatus.Status)}, "
-                #     f"Bus State: {CANdoBusStsErr(self.CANdoStatus.BusState)}",
-                # )
+                ret = CANdoReceive(self.CANdoUSBPtr, self.CANdoCANBufferPtr, self.CANdoStatusPtr)
+                if ret != CANdoFuncRetCode.CANDO_SUCCESS:
+                    raise CANdoOperationError(f"Failed to receive messages, error code: {CANdoFuncRetCodeErr(ret)}")
 
-            if self.CANdoCANBuffer.ReadIndex == self.CANdoCANBuffer.WriteIndex and not self.CANdoCANBuffer.FullFlag:
-                # No messages were received, sleep for a short time
+                # log.debug(f"Status: {CANdoStsErr(self.CANdoStatus.Status)}, \nBus State: {CANdoBusStsErr(self.CANdoStatus.BusState)}")
+
+                while self.CANdoCANBuffer.ReadIndex != self.CANdoCANBuffer.WriteIndex or self.CANdoCANBuffer.FullFlag:
+                    has_received_messages = True
+
+                    arbitration_id = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].ID
+                    ide = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].IDE
+                    rtr = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].RTR
+                    dlc = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].DLC
+                    data = bytearray(self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].Data[:dlc])
+
+                    # # Unused for now; however, check for the "state" property and "BusState" enum  in bus.py
+                    # bus_state = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].BusState
+
+                    # Timestamp - a timestamp indicating the receive time of the message since starting CANdo.
+                    timestamp = (self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].TimeStamp * ts_resolution) + self.t_start
+
+                    # Increment index onto next circular buffer element
+                    self.CANdoCANBuffer.ReadIndex = (self.CANdoCANBuffer.ReadIndex + 1) % CANDO_CAN_BUFFER_LENGTH
+                    self.CANdoCANBuffer.FullFlag = False  # No longer full
+
+                    self.msg_queue.put((timestamp, arbitration_id, bool(ide), rtr, dlc, data))
+
+                    if self.CANdoStatus.NewFlag == CANDO_DEVICE_STATUS:  # type: ignore
+                        # log.debug(f"  Status = {self.CANdoStatus.Status}, Bus State = {self.CANdoStatus.BusState}")
+                        self.CANdoStatus.NewFlag = CANDO_NO_STATUS  # Clear status flag
+
+            if not has_received_messages:
+                # No messages were received, sleep for a short time OUTSIDE the lock
                 sleep(0.01)
                 continue
-
-            while self.CANdoCANBuffer.ReadIndex != self.CANdoCANBuffer.WriteIndex or self.CANdoCANBuffer.FullFlag:
-                arbitration_id = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].ID
-                ide = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].IDE
-                rtr = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].RTR
-                dlc = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].DLC
-                data = bytearray(self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].Data[:dlc])
-
-                # # Unused for now; however, check for the "state" property and "BusState" enum  in bus.py
-                # bus_state = self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].BusState
-
-                # Timestamp - a timestamp indicating the receive time of the message since starting CANdo.
-                timestamp = (self.CANdoCANBuffer.CANMessage[self.CANdoCANBuffer.ReadIndex].TimeStamp * ts_resolution) + self.t_start
-
-                # Increment index onto next circular buffer element
-                self.CANdoCANBuffer.ReadIndex = (self.CANdoCANBuffer.ReadIndex + 1) % CANDO_CAN_BUFFER_LENGTH
-                self.CANdoCANBuffer.FullFlag = False  # No longer full
-
-                self.msg_queue.put(
-                    (
-                        timestamp,
-                        arbitration_id,
-                        bool(ide),
-                        rtr,
-                        dlc,
-                        data,
-                    ),
-                )
-
-                if self.CANdoStatus.NewFlag == CANDO_DEVICE_STATUS:  # type: ignore
-                    # log.debug(f"  Status = {self.CANdoStatus.Status}, Bus State = {self.CANdoStatus.BusState}")
-                    self.CANdoStatus.NewFlag = CANDO_NO_STATUS  # Clear status flag
 
     @override
     def flush_tx_buffer(self) -> None:
