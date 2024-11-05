@@ -91,6 +91,9 @@ CANDO_REMOTE_FRAME = 1  # CAN remote frame
 CANDO_CAN_BUFFER_LENGTH = 2048  # Size of CAN message receive cyclic buffer
 CANDO_MAX_STRING_SIZE = 256  # Max. no. of bytes in a string returned by the device
 
+# Maximum number of filters masks
+CANDO_MAX_FILTERS = 2
+
 
 class CANdoHWType(IntEnum):
     # CANdo H/W types

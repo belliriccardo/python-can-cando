@@ -2,6 +2,9 @@ import logging
 import sys
 import threading
 from ctypes import byref, c_int, c_ubyte, pointer
+
+# Fix relative import
+from pathlib import Path
 from queue import Empty, Queue
 from time import sleep, time
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -9,12 +12,15 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from can import BusABC, CanProtocol, Message
 from can.typechecking import AutoDetectedConfig, CanFilters
 
+sys.path.append(Path(__file__).resolve().parents[1].as_posix())
+
 from can_cando.CANdoImport import (
     CAN_MSG_TIMESTAMP_RESOLUTION,
     CANDO_CAN_BUFFER_LENGTH,
     CANDO_DEVICE_STATUS,
     CANDO_ID_11_BIT,
     CANDO_ID_29_BIT,
+    CANDO_MAX_FILTERS,
     CANDO_NO_STATUS,
     CANDO_PID,
     # CANDO_REPEAT_TIME_MAP,
@@ -526,7 +532,7 @@ class CANdoBus(BusABC):
 
     def _detect_cando_iso(self) -> None:
         # CANdoGetDevices & CANdoGetPID functions
-        self.NoOfDevices = c_int(5)  # Look for up to 5 CANdo devices
+        self.NoOfDevices = c_int(10)  # Look for up to 10 CANdo devices
         # Create an array type of TCANdoDevice for those devices
         self.TCANdoDevices = TCANdoDevice * self.NoOfDevices.value
         self.CANdoDevices = self.TCANdoDevices()  # Create an instance of TCANdoDevices array
@@ -579,7 +585,7 @@ class CANdoBus(BusABC):
             Data Length Code, 0 - 8 (No. of data bytes in message)
 
         :param Data:
-            byte array containing data to be transmitted (Note : A null pointer is
+            byte array containing data to be transmitted (Note: A null pointer is
             permitted for a remote frame transmission, see note below)
 
         :param BufferNo:
@@ -623,6 +629,22 @@ class CANdoBus(BusABC):
                 int(RepeatTime),
             ),
         )
+
+    def cando_stop_all_periodic_transmissions(self) -> None:
+        """Stop all periodic transmissions on the CAN bus."""
+        if not self.CANdoUSB.OpenFlag:
+            raise CANdoOperationError("Device not open!")
+
+        for buf_no in range(1, 16):
+            self.cando_transmit(
+                0,
+                0,
+                0,
+                0,
+                self.DataArrays[0](),
+                buf_no,
+                CANdoRepeatTime.CANDO_REPEAT_TIME_OFF,
+            )
 
     def _recv_t(self) -> None:
         # Local copy to avoid global lookups
@@ -724,24 +746,6 @@ class CANdoBus(BusABC):
             raise CANdoOperationError(f"Failed to transmit message, error code(s): {CANdoFuncRetCodeErr(tx_res)}")
 
     @override
-    def shutdown(self) -> None:
-        super().shutdown()
-        self._is_shutdown = True
-        if hasattr(self, "_recv_thread") and self._recv_thread.is_alive():
-            self._recv_thread.join()
-
-        # CANdo connection is open, so close
-        if hasattr(self, "CANdoUSB"):
-            if self.CANdoUSB.OpenFlag:
-                res = CANdoClose(self.CANdoUSBPtr)
-                if res == CANdoFuncRetCode.CANDO_SUCCESS:
-                    log.debug("Connection closed successfully.")
-                else:
-                    raise CANdoOperationError(f"Failed to close connection, error code: {CANdoFuncRetCodeErr(res)}")
-            else:
-                log.debug("Connection to device is already closed!")
-
-    @override
     def _recv_internal(self, timeout: Optional[float]) -> Tuple[Optional[Message], bool]:
         try:
             msg = self.msg_queue.get(timeout=timeout)
@@ -766,38 +770,45 @@ class CANdoBus(BusABC):
 
     @override
     def set_filters(self, filters: Optional[CanFilters] = None) -> None:
-        # TODO: Implement
-
         if filters is None:
             return
 
-        filters_mask_dict: Dict[int, List[Tuple[int, int]]] = {}
+        if len({f["can_mask"] for f in filters}) > CANDO_MAX_FILTERS:
+            raise CANdoInitializationError(f"CANdo(ISO) device supports only {CANDO_MAX_FILTERS} filter masks!")
+
+        flt_msk_map: Dict[int, List[Tuple[int, int]]] = {}
         for flt in filters:
             can_id = flt["can_id"]
             can_mask = flt["can_mask"]
             extended = int(flt.get("extended", False))  # type: ignore
 
-            if can_id not in filters_mask_dict:
-                filters_mask_dict[can_id] = [(can_mask, extended)]
-            else:
-                filters_mask_dict[can_id].append((can_mask, extended))
+            if can_mask not in flt_msk_map:
+                flt_msk_map[can_mask] = []
 
-        # Are there more extended or standard filters?
-        n_ext = len({v[1] for v in filters_mask_dict.values() if v[1]})
-        n_std = len({v[1] for v in filters_mask_dict.values() if not v[1]})
+            flt_msk_map[can_mask].append((extended, can_id))
 
-        use_2nd_mask_for_ext = False
-        if n_ext > n_std:
-            use_2nd_mask_for_ext = True
+        masks = list(flt_msk_map.keys())
 
-        del use_2nd_mask_for_ext  # TODO: Implement this
+        # Which mask has the longest list of IDs? We do this so that masks[0] is the
+        # mask with the least IDs, and masks[1] is the mask with the most IDs.
+        masks.sort(key=lambda x: len(flt_msk_map[x]))
 
-        # Default values (pass all filters)
-        Rx1Mask: int = 0
-        Rx1IDE1: int = CANDO_ID_29_BIT
-        Rx1Filter1: int = 0
+        Rx1Mask: int = masks[0]
+        Rx1MskFlt = flt_msk_map[Rx1Mask]
+
+        Rx1IDE1, Rx1Filter1 = Rx1MskFlt[0]
+
+        # Default values
         Rx1IDE2: int = CANDO_ID_11_BIT
         Rx1Filter2: int = 0
+
+        if len(Rx1MskFlt) > 1:
+            Rx1IDE2, Rx1Filter2 = Rx1MskFlt[1]
+
+        if len(Rx1MskFlt) > 2:
+            log.error(f"CANdo(ISO) device only supports 2 IDs in the first masking filter, ignoring the rest: {Rx1MskFlt[2:]}")
+
+        # Default values
         Rx2Mask: int = 0
         Rx2IDE1: int = CANDO_ID_29_BIT
         Rx2Filter1: int = 0
@@ -808,31 +819,63 @@ class CANdoBus(BusABC):
         Rx2IDE4: int = CANDO_ID_11_BIT
         Rx2Filter4: int = 0
 
-        # for can_filter in filters:
-        #     can_id = can_filter["can_id"]
-        #     can_mask = can_filter["can_mask"]
-        #     extended = int(can_filter.get("extended", False))
+        if len(masks) > 1:
+            Rx2Mask = masks[1]
+            Rx2MskFlt = flt_msk_map[Rx2Mask]
+            Rx2IDE1, Rx2Filter1 = Rx2MskFlt[0]
 
-        try:
-            self.cando_set_filters(
-                Rx1Mask=Rx1Mask,
-                Rx1IDE1=Rx1IDE1,
-                Rx1Filter1=Rx1Filter1,
-                Rx1IDE2=Rx1IDE2,
-                Rx1Filter2=Rx1Filter2,
-                Rx2Mask=Rx2Mask,
-                Rx2IDE1=Rx2IDE1,
-                Rx2Filter1=Rx2Filter1,
-                Rx2IDE2=Rx2IDE2,
-                Rx2Filter2=Rx2Filter2,
-                Rx2IDE3=Rx2IDE3,
-                Rx2Filter3=Rx2Filter3,
-                Rx2IDE4=Rx2IDE4,
-                Rx2Filter4=Rx2Filter4,
-            )
-        except CANdoInitializationError:
-            self.filters_active = False
-            raise
+            if len(Rx2MskFlt) > 1:
+                Rx2IDE2, Rx2Filter2 = Rx2MskFlt[1]
+
+            if len(Rx2MskFlt) > 2:
+                Rx2IDE3, Rx2Filter3 = Rx2MskFlt[2]
+
+            if len(Rx2MskFlt) > 3:
+                Rx2IDE4, Rx2Filter4 = Rx2MskFlt[3]
+
+            if len(Rx2MskFlt) > 4:
+                log.error(f"CANdo(ISO) device only supports 4 IDs in the second masking filter, ignoring the rest: {Rx2MskFlt[4:]}")
+
+        self.cando_set_filters(
+            Rx1Mask=Rx1Mask,
+            Rx1IDE1=Rx1IDE1,
+            Rx1Filter1=Rx1Filter1,
+            Rx1IDE2=Rx1IDE2,
+            Rx1Filter2=Rx1Filter2,
+            Rx2Mask=Rx2Mask,
+            Rx2IDE1=Rx2IDE1,
+            Rx2Filter1=Rx2Filter1,
+            Rx2IDE2=Rx2IDE2,
+            Rx2Filter2=Rx2Filter2,
+            Rx2IDE3=Rx2IDE3,
+            Rx2Filter3=Rx2Filter3,
+            Rx2IDE4=Rx2IDE4,
+            Rx2Filter4=Rx2Filter4,
+        )
+        # If we got here, no exceptions were raised, so filters are active
+        self.filters_active = True
+
+    @override
+    def shutdown(self) -> None:
+        super().shutdown()
+        if hasattr(self, "_recv_thread") and self._recv_thread.is_alive():
+            self._recv_thread.join()
+
+        # CANdo connection is open, so close
+        if hasattr(self, "CANdoUSB"):
+            if self.CANdoUSB.OpenFlag:
+                res = CANdoClose(self.CANdoUSBPtr)
+                if res == CANdoFuncRetCode.CANDO_SUCCESS:
+                    log.debug("Connection closed successfully.")
+                else:
+                    log.error(f"Failed to close connection, error code: {CANdoFuncRetCodeErr(res)}")
+            else:
+                log.debug("Connection to device is already closed!")
+
+    @override
+    def stop_all_periodic_tasks(self, remove_tasks: bool = True) -> None:
+        self.cando_stop_all_periodic_transmissions()
+        super().stop_all_periodic_tasks(remove_tasks=remove_tasks)
 
 
 def main() -> None:
@@ -848,6 +891,14 @@ def main() -> None:
     selected = int(input("Select channel: "))
 
     bus = CANdoBus(selected)
+
+    can_filters = [
+        {"can_mask": 0x7FF, "can_id": 0x0, "extended": False},
+        {"can_mask": 0x1FFF0000, "can_id": 0x1500, "extended": True},
+        {"can_mask": 0x1FFF0000, "can_id": 0x18DA0000, "extended": True},
+    ]
+
+    bus.set_filters(can_filters)  # type: ignore
 
     try:
         while True:

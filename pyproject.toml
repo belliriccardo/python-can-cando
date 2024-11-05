@@ -12,12 +12,17 @@ keywords = ["python-can", "CAN", "CANbus", "netronics", "cando", "candoiso"]
 authors = [{ name = "Riccardo Belli", email = "riccardo.belli@solaredge.com" }]
 classifiers = [
     "Programming Language :: Python",
+    "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: Software Development :: Embedded Systems :: Controller Area Network (CAN)",
+    "Typing :: Typed",
     "Operating System :: Microsoft :: Windows",
     "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
     "Intended Audience :: Developers",
@@ -43,8 +48,8 @@ zip-safe = false
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# [tool.setuptools.package-data]
-# can_cando = ["py.typed", "*.pyi"]
+[tool.setuptools.package-data]
+can_cando = ["py.typed", "*.pyi"]
 
 [tool.setuptools.dynamic]
 version = { attr = "can_cando.__version__" }
@@ -91,10 +96,11 @@ ignore = [
     "EM101",
     "EM102",
     "D105",
-    "PLR0912",
     "FBT002",
     "BLE001",
+    "PLR0912",
     "PLR0913",
+    "PLR2004",
     "RUF012",
     "SLF001",
     "G001",
