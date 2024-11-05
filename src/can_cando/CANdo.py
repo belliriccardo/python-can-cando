@@ -697,7 +697,6 @@ class CANdoBus(BusABC):
             if not has_received_messages:
                 # No messages were received, sleep for a short time OUTSIDE the lock
                 sleep(0.01)
-                continue
 
     @override
     def flush_tx_buffer(self) -> None:
@@ -713,7 +712,7 @@ class CANdoBus(BusABC):
         if bus.NoOfDevices.value > 0:
             interfaces = [AutoDetectedConfig(interface="cando", channel=c) for c in range(bus.NoOfDevices.value)]
 
-        bus.shutdown()  # Close connection to the mo
+        bus.shutdown()  # Close connection
         del bus
 
         return interfaces
