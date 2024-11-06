@@ -1,5 +1,17 @@
 # python-can-cando
 
+![PyPI - Implementation](https://img.shields.io/pypi/implementation/python-can-cando) ![PyPI - Version](https://img.shields.io/pypi/v/python-can-cando) ![PyPI Downloads](https://static.pepy.tech/badge/python-can-cando) ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/python-can-cando)
+
+-----
+
+- [Description](#description)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Extra information](#extra-information)
+        - [A note on bus load](#a-note-on-bus-load)
+- [Compatibility](#compatibility)
+- [License](#license)
+
 ## Description
 This module is a plugin that lets you use [netronics](http://www.netronics.ltd.uk/)' can adapters (namely the [CANdo](https://www.cananalyser.co.uk/cando.html) and [CANdoISO](https://www.cananalyser.co.uk/candoiso.html) devices) in [python-can](https://python-can.readthedocs.io/en/stable/)'s [plugin interface](https://python-can.readthedocs.io/en/stable/plugin-interface.html).
 
@@ -50,3 +62,5 @@ Anyways, any feedback is appreciated and welcome; just open an issue or a pull r
 ## License
 
 `python-can-cando` is distributed under the terms of the [LGPL-3.0-or-later](https://spdx.org/licenses/LGPL-3.0-or-later.html) license.
+
+[def]: #python-can-cando
