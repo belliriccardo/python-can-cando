@@ -848,7 +848,11 @@ class CANdoBus(BusABC):
 
     @override
     def shutdown(self) -> None:
-        super().shutdown()
+        try:
+            super().shutdown()
+        except Exception:
+            log.exception("Error during shutdown!")
+
         if hasattr(self, "_recv_thread") and self._recv_thread.is_alive():
             self._recv_thread.join()
 
@@ -881,7 +885,8 @@ class CANdoBus(BusABC):
 
     @override
     def stop_all_periodic_tasks(self, remove_tasks: bool = True) -> None:
-        self.cando_stop_all_periodic_transmissions()
+        if hasattr(self, "CANdoUSB"):
+            self.cando_stop_all_periodic_transmissions()
         super().stop_all_periodic_tasks(remove_tasks=remove_tasks)
 
 
