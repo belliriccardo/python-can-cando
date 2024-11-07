@@ -58,7 +58,7 @@ I found that the device tends to get the `CANDO_CAN_RX_OVERRUN` status if there 
 I developed this library with a CANdoISO device; I don't have a CANdo device to test it, but it should work just as well.
 There are some minor differences between the two (for example a different clock frequency), but from a software point of view the interfaces are very similar.
 
-This library was developed and tested on Windows 10 and python 3.12, but it should be good to go with python up till 3.6 (checked with [vermin](https://github.com/netromdk/vermin)) and non-Windows OSs.
+This library was developed and tested on Windows 10 and python 3.12, but it should be good to go with python up till 3.7 (checked with [vermin](https://github.com/netromdk/vermin)) and non-Windows OSs.
 
 Anyways, any feedback is appreciated and welcome; just open an issue or a pull request and I'll gladly take a look at it.
 
