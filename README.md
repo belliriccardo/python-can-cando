@@ -1,6 +1,9 @@
 # python-can-cando
 
-![PyPI - Implementation](https://img.shields.io/pypi/implementation/python-can-cando) ![PyPI - Version](https://img.shields.io/pypi/v/python-can-cando) ![PyPI Downloads](https://static.pepy.tech/badge/python-can-cando) ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/python-can-cando)
+[![PyPI - Implementation](https://img.shields.io/pypi/implementation/python-can-cando)](https://pypi.org/project/python-can-cando/)
+[![PyPI - Version](https://img.shields.io/pypi/v/python-can-cando)](https://pypi.org/project/python-can-cando/)
+[![PyPI Downloads](https://static.pepy.tech/badge/python-can-cando)](https://www.pepy.tech/projects/python-can-cando)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/python-can-cando)](https://pypi.org/project/python-can-cando/)
 
 -----
 
