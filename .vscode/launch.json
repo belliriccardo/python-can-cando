@@ -5,10 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: CANdoISO",
+            "name": "Python Debugger: CANdoTest",
             "type": "debugpy",
             "request": "launch",
-            "program": "src/can_cando/CANdo.py",
+            "program": "src/can_cando/CANdoTest.py",
             "console": "integratedTerminal",
             "justMyCode": false,
         },

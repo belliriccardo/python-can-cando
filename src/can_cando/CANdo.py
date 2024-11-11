@@ -16,12 +16,14 @@ from can_cando.CANdoImport import (
     CANDO_DEVICE_STATUS,
     CANDO_ID_11_BIT,
     CANDO_ID_29_BIT,
+    CANDO_LATEST_SW,
     CANDO_MAX_FILTERS,
     CANDO_NO_STATUS,
     CANDO_PID,
     # CANDO_REPEAT_TIME_MAP,
     CANDO_RUN,
     CANDO_STOP,
+    CANDOISO_LATEST_SW,
     CANDOISO_PID,
     CANdoBusStsErr,
     CANdoCANBufferPtrType,
@@ -153,7 +155,6 @@ class CANdoBus(BusABC):
         channel: Optional[int] = None,
         can_filters: Optional[CanFilters] = None,
         bitrate: Optional[int] = default_bitrate,
-        is_candoiso: Optional[bool] = False,
         **kwargs: object,
     ) -> None:
         self.channel = channel
@@ -174,6 +175,7 @@ class CANdoBus(BusABC):
             f"Driver = v{DriverVersion.value / 10}\n"
         )
 
+        self.devices_PIDs: list[bytes] = []
         self._detect_cando_iso()
 
         if channel is None:
@@ -191,7 +193,7 @@ class CANdoBus(BusABC):
                 f"Invalid channel number: {channel}, only {self.NoOfDevices.value} devices detected and values start at 0",
             )
 
-        self.is_candoiso = is_candoiso
+        self.is_candoiso = self.devices_PIDs[channel] == CANDOISO_PID
         self.bit_timing = cando_get_timing(bitrate or self.default_bitrate)
 
         # CANdoOpen function
@@ -558,7 +560,24 @@ class CANdoBus(BusABC):
                     sts += f"Status Err: {CANdoStsErr(self.CANdoStatus.Status)}\n"
                     sts += f"Bus State Err: {CANdoBusStsErr(self.CANdoStatus.BusState)}\n"
 
+                    self.cando_check_software(self.CANdoStatus.HardwareVersion, self.CANdoStatus.SoftwareVersion)
+
         return sts
+
+    def cando_check_software(self, hw_ver: int, sw_ver: int) -> None:
+        device = "CANdoISO" if self.is_candoiso else "CANdo"
+        try:
+            msg = ""
+            if self.is_candoiso:
+                if CANDOISO_LATEST_SW[hw_ver] > sw_ver:
+                    msg = f"Newer software version available for {device}: v{CANDOISO_LATEST_SW[hw_ver] / 10}"
+            else:  # noqa: PLR5501
+                if CANDO_LATEST_SW[hw_ver] > sw_ver:
+                    msg = f"Newer software version available for {device}: v{CANDO_LATEST_SW[hw_ver] / 10}"
+            if msg != "":
+                log.debug(msg)
+        except KeyError:
+            log.error(f"Unknown hardware version {hw_ver} for device {device}")  # noqa: TRY400
 
     def print_status(self) -> None:
         log.info(self.get_status_description())
@@ -612,6 +631,7 @@ class CANdoBus(BusABC):
                     log.debug(f"  Device no. {CANdoNo} >\n    PID = 0x{self.CANdoPID.value.decode('utf-8').upper()}")
                     if self.CANdoPID.value not in [CANDO_PID, CANDOISO_PID]:
                         log.warning(f"    Device no. {CANdoNo} is not a CANdo(ISO) device!")
+                    self.devices_PIDs.append(self.CANdoPID.value)
 
                     # H/W type & S/N
                     log.debug(

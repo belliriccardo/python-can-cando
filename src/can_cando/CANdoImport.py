@@ -13,7 +13,8 @@
 #  UPDATES :-
 #  22/01/21 Created (Martyn Brown)
 #  05/11/24 Modified for python-can compatibility, type
-#           hinting and error codes (Riccardo Belli)
+#           hinting and error codes (Riccardo Belli). Found on:
+#           github.com/belliriccardo/python-can-cando
 #
 #  LICENSE :-
 #  The SDK (Software Development Kit) provided for use with the CANdo device
@@ -150,6 +151,19 @@ class CANdoRepeatTime(IntEnum):
     CANDO_REPEAT_TIME_5S = 9  # 5s
     CANDO_REPEAT_TIME_10S = 10  # 10s
 
+
+# From Canalyzer's website; will need to be updated
+CANDO_LATEST_SW = {
+    60: 31,
+    70: 42,
+    80: 51,
+}
+
+
+CANDOISO_LATEST_SW = {
+    20: 34,
+    30: 41,
+}
 
 # ------------------------------------------------------------------------------
 # TYPEDEFS

@@ -1,6 +1,6 @@
 """Module provides the "python-can" plugin interface implementation "CANdoBus" class for interfacing with CANdo(ISO) physical devices."""
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 
 __all__ = ["__version__", "CANdoBus"]
 
