@@ -12,7 +12,9 @@ from can.typechecking import AutoDetectedConfig, CanFilters
 
 from can_cando.CANdoImport import (
     CAN_MSG_TIMESTAMP_RESOLUTION,
+    CANDO_BUS_LOAD_STATUS,
     CANDO_CAN_BUFFER_LENGTH,
+    CANDO_DATE_STATUS,
     CANDO_DEVICE_STATUS,
     CANDO_ID_11_BIT,
     CANDO_ID_29_BIT,
@@ -38,12 +40,12 @@ from can_cando.CANdoImport import (
     CANdoInitializationError,
     CANdoMode,
     CANdoOpenDevice,
-    # CANdoRequestBusLoadStatus,
-    # CANdoRequestDateStatus,
     CANdoOperationError,
     CANdoPIDType,
     CANdoReceive,
     CANdoRepeatTime,
+    CANdoRequestBusLoadStatus,
+    CANdoRequestDateStatus,
     CANdoRequestStatus,
     CANdoSetBaudRate,
     CANdoSetFilters,
@@ -175,7 +177,7 @@ class CANdoBus(BusABC):
             f"Driver = v{DriverVersion.value / 10}\n"
         )
 
-        self.devices_PIDs: list[bytes] = []
+        self.devices_PIDs: List[bytes] = []
         self._detect_cando_iso()
 
         if channel is None:
@@ -496,18 +498,36 @@ class CANdoBus(BusABC):
         detected on the CAN bus, or if there is an internal system error within the
         CANdo device.)
         """
+        # TODO: Use "CANdoRequestStatus" function
 
-    def cando_get_date_status(self) -> None:
+    def cando_get_date_status(self) -> Optional[Tuple[int, int, int]]:
         """Request the date of manufacture of the CANdo device.
 
         After sending this command to CANdo, the date status is transmitted back to
         the PC in <1ms. To read the status, call the CANdoReceive(...) function &
         interrogate the NewFlag & status information within the TCANdoStatus
         parameter.
-        """
-        # TODO: Use "CANdoRequestDateStatus" function
 
-    def cando_request_bus_load_status(self) -> None:
+        :return: Tuple containing the manufacturing date as (day, month, year).
+        """
+        ret = None
+        with self._recv_lock:  # Ensure that the receiving thread does not interfere
+            if CANdoRequestDateStatus(self.CANdoUSBPtr) == CANdoFuncRetCode.CANDO_SUCCESS:
+                sleep(0.001)
+                self.CANdoStatus.NewFlag = CANDO_NO_STATUS  # Clear status flag
+                if (
+                    CANdoReceive(
+                        self.CANdoUSBPtr,
+                        self.CANdoCANBufferPtr,
+                        self.CANdoStatusPtr,
+                    )
+                    == CANdoFuncRetCode.CANDO_SUCCESS
+                ) and self.CANdoStatus.NewFlag == CANDO_DATE_STATUS:  # type: ignore
+                    ret = (self.CANdoStatus.SoftwareVersion, self.CANdoStatus.Status, self.CANdoStatus.BusState)
+
+        return ret
+
+    def cando_request_bus_load_status(self) -> Optional[Tuple[float, int, int]]:
         """Request the CAN bus loading as calculated by connected device.
 
         The bus load is calculated every second, while the device is running.
@@ -516,8 +536,28 @@ class CANdoBus(BusABC):
         back to the PC in <1ms. To read the status, call the CANdoReceive(...)
         function & interrogate the NewFlag & status information within the
         TCANdoStatus parameter.
+
+        :return: Tuple containing bus load percentage, CAN RX error count, CAN TX error count.
         """
-        # TODO: Use the "CANdoRequestBusLoadStatus" function
+        ret = None
+        with self._recv_lock:  # Ensure that the receiving thread does not interfere
+            if CANdoRequestBusLoadStatus(self.CANdoUSBPtr) == CANdoFuncRetCode.CANDO_SUCCESS:
+                sleep(0.001)
+                self.CANdoStatus.NewFlag = CANDO_NO_STATUS  # Clear status flag
+                if (
+                    CANdoReceive(
+                        self.CANdoUSBPtr,
+                        self.CANdoCANBufferPtr,
+                        self.CANdoStatusPtr,
+                    )
+                    == CANdoFuncRetCode.CANDO_SUCCESS
+                ) and self.CANdoStatus.NewFlag == CANDO_BUS_LOAD_STATUS:  # type: ignore
+                    ret = (
+                        self.CANdoStatus.HardwareVersion + self.CANdoStatus.SoftwareVersion / 10,
+                        self.CANdoStatus.Status,
+                        self.CANdoStatus.BusState,
+                    )
+        return ret
 
     def get_status_description(self) -> str:
         """Request the CAN bus & internal CANdo status.
