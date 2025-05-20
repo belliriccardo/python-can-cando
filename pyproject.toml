@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.7"
 license = { text = "LGPL v3" }
 keywords = ["python-can", "CAN", "CANbus", "netronics", "cando", "candoiso"]
-authors = [{ name = "Riccardo Belli", email = "riccardo.belli@solaredge.com" }]
+authors = [{ name = "Riccardo Belli" }]
 classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.7",
@@ -40,6 +40,7 @@ Documentation = "https://github.com/belliriccardo/python-can-cando#readme"
 Issues = "https://github.com/belliriccardo/python-can-cando/issues"
 Source = "https://github.com/belliriccardo/python-can-cando"
 Homepage = "https://github.com/belliriccardo/python-can-cando"
+PersonalHomepage = "https://www.riccardobelli.it"
 
 [tool.setuptools]
 zip-safe = false

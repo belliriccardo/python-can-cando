@@ -157,7 +157,7 @@ class CANdoBus(BusABC):
         channel: Optional[int] = None,
         can_filters: Optional[CanFilters] = None,
         bitrate: Optional[int] = default_bitrate,
-        **kwargs: object,
+        **kwargs: object,  # noqa: ARG002
     ) -> None:
         self.channel = channel
         self._filters = can_filters
@@ -858,7 +858,7 @@ class CANdoBus(BusABC):
         return interfaces
 
     @override
-    def send(self, msg: Message, timeout: Optional[float] = None) -> None:
+    def send(self, msg: Message, timeout: Optional[float] = None) -> None:  # noqa: ARG002
         if not self.CANdoUSB.OpenFlag:
             raise CANdoOperationError("CANdo(ISO) device is not open!")
 
