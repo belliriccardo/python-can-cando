@@ -40,7 +40,7 @@ Documentation = "https://github.com/belliriccardo/python-can-cando#readme"
 Issues = "https://github.com/belliriccardo/python-can-cando/issues"
 Source = "https://github.com/belliriccardo/python-can-cando"
 Homepage = "https://github.com/belliriccardo/python-can-cando"
-PersonalHomepage = "https://www.riccardobelli.it"
+"Personal Homepage" = "https://www.riccardobelli.it"
 
 [tool.setuptools]
 zip-safe = false
